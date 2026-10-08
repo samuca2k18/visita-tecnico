@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabase, supabaseReady, money, when, uid, STATUS } from "../../lib/shared";
 import { loadDemo, saveDemo, encodeQuote } from "../../lib/demo";
+import { openPaper } from "../../lib/papers";
 
 export default function Painel() {
   const live = supabaseReady();
@@ -52,58 +53,30 @@ export default function Painel() {
     if (!live) saveDemo(next);
   }
 
-  const [info, setInfo] = useState("");
-
-  function readCreds(e) {
-    const form = e?.currentTarget?.form || e?.currentTarget;
-    const fd = form && form.elements ? form : null;
-    const em = (fd?.elements?.email?.value ?? email).trim();
-    const pw = fd?.elements?.password?.value ?? password;
-    return { em, pw };
-  }
-
-  function traduz(msg) {
-    if (/anonymous sign-ins are disabled/i.test(msg)) return "Preencha o e-mail e a senha.";
-    if (/invalid login credentials/i.test(msg)) return "E-mail ou senha incorretos.";
-    if (/email not confirmed/i.test(msg)) return "Confirme seu e-mail antes de entrar (veja sua caixa de entrada).";
-    if (/already registered/i.test(msg)) return "Esse e-mail já tem conta. Use Entrar.";
-    if (/rate limit/i.test(msg)) return "Muitas tentativas. Espere alguns minutos e tente de novo.";
-    return msg;
-  }
-
   async function signIn(e) {
     e.preventDefault();
     setError("");
-    setInfo("");
-    const { em, pw } = readCreds(e);
-    if (!em || !pw) return setError("Preencha o e-mail e a senha.");
     const sb = getSupabase();
-    const { error: err } = await sb.auth.signInWithPassword({ email: em, password: pw });
-    if (err) setError(traduz(err.message));
+    const { error: err } = await sb.auth.signInWithPassword({ email, password });
+    if (err) setError(err.message);
   }
 
   async function signUp(e) {
     e.preventDefault();
     setError("");
-    setInfo("");
-    const { em, pw } = readCreds(e);
-    if (!em || !pw) return setError("Preencha o e-mail e a senha para criar a conta.");
-    if (pw.length < 6) return setError("A senha precisa ter pelo menos 6 caracteres.");
     const sb = getSupabase();
-    const { data: created, error: err } = await sb.auth.signUp({
-      email: em,
-      password: pw,
-      options: { emailRedirectTo: `${window.location.origin}/painel` }
-    });
-    if (err) return setError(traduz(err.message));
-    // O perfil é criado por trigger no banco (auto_create_profile).
-    if (!created.session) setInfo("Conta criada! Confira seu e-mail para confirmar e depois clique em Entrar.");
+    const { data: created, error: err } = await sb.auth.signUp({ email, password });
+    if (err) return setError(err.message);
+    if (created.user) {
+      await sb.from("profiles").insert({ id: created.user.id, business_name: "Meu serviço", city: "Fortaleza" });
+    }
   }
 
   async function saveProfile(profile) {
     persist({ ...data, profile });
     if (!live) return;
-    await getSupabase().from("profiles").upsert({ id: session.user.id, ...profile });
+    const { logo_data, cnpj, address_line, email, owner_name, ...base } = profile;
+    await getSupabase().from("profiles").upsert({ id: session.user.id, ...base });
   }
 
   async function addService(service) {
@@ -147,11 +120,10 @@ export default function Painel() {
           <div className="kicker">Técnico</div>
           <h2>Entrar</h2>
           <label>E-mail</label>
-          <input name="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           <label>Senha</label>
-          <input name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
           {error && <p className="error">{error}</p>}
-          {info && <p className="muted">{info}</p>}
           <div className="row" style={{ marginTop: 16 }}>
             <button className="btn" type="submit">Entrar</button>
             <button className="btn-ghost" type="button" onClick={signUp}>Criar conta</button>
@@ -204,10 +176,12 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
             <span className="price">{money(q.price_cents)}</span>
             <button className="btn-ghost" onClick={() => copy(q)}>{copied === q.token ? "Copiado" : "Copiar link"}</button>
           </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            {q.status === "approved" && <button className="btn" onClick={() => setStatus(q.token, "done")}>Marcar feito</button>}
-            {q.status === "done" && <button className="btn" onClick={() => setStatus(q.token, "paid")}>Marcar pago</button>}
-          </div>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="btn-ghost" onClick={() => openPaper("orcamento", q, data.profile)}>PDF orçamento</button>
+              <button className="btn-ghost" onClick={() => openPaper("recibo", q, data.profile)}>PDF recibo</button>
+              {q.status === "approved" && <button className="btn" onClick={() => setStatus(q.token, "done")}>Marcar feito</button>}
+              {q.status === "done" && <button className="btn" onClick={() => setStatus(q.token, "paid")}>Marcar pago</button>}
+            </div>
         </article>
       ))}
     </div>
@@ -288,15 +262,33 @@ function Ajustes({ data, saveProfile, live, onOut }) {
   const [profile, setProfile] = useState(data.profile);
   return (
     <form className="card" onSubmit={(e) => { e.preventDefault(); saveProfile(profile); }}>
-      <label>Nome no orçamento</label>
-      <input value={profile.business_name} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} />
-      <label>Telefone</label>
-      <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-      <label>Chave PIX</label>
-      <input value={profile.pix_key} onChange={(e) => setProfile({ ...profile, pix_key: e.target.value })} />
+      <label>Nome no papel</label>
+      <input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} />
+      <label>Responsável</label>
+      <input value={profile.owner_name || ""} onChange={(e) => setProfile({ ...profile, owner_name: e.target.value })} />
+      <label>CNPJ</label>
+      <input value={profile.cnpj || ""} onChange={(e) => setProfile({ ...profile, cnpj: e.target.value })} />
+      <label>Endereço da empresa</label>
+      <input value={profile.address_line || ""} onChange={(e) => setProfile({ ...profile, address_line: e.target.value })} />
       <label>Cidade</label>
       <input value={profile.city || ""} onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
+      <label>Telefone</label>
+      <input value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+      <label>E-mail</label>
+      <input value={profile.email || ""} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+      <label>Chave PIX</label>
+      <input value={profile.pix_key || ""} onChange={(e) => setProfile({ ...profile, pix_key: e.target.value })} />
+      <label>Logo</label>
+      <input type="file" accept="image/*" onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setProfile({ ...profile, logo_data: reader.result });
+        reader.readAsDataURL(file);
+      }} />
+      {profile.logo_data && <img src={profile.logo_data} alt="Logo" style={{ height: 64, marginTop: 8 }} />}
       <button className="btn" style={{ marginTop: 14 }} type="submit">Salvar</button>
+      <p className="small muted">A logo fica só neste aparelho. No PDF entra no topo, se existir. A assinatura não vai pronta: o papel deixa o campo e recomenda assinar digitalmente.</p>
       <p className="small muted">{live ? "Conta ligada ao Supabase." : "Sem chave do Supabase: os dados ficam neste navegador. O link do cliente funciona em outro celular porque o orçamento vai dentro do próprio link."}</p>
       {live && <button className="btn-ghost" type="button" onClick={onOut}>Sair</button>}
     </form>

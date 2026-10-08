@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabase, supabaseReady, money, when } from "../../../lib/shared";
 import { decodeQuote } from "../../../lib/demo";
-import { downloadQuotePdf, quoteNumber } from "../../../lib/quotePdf";
+import { downloadQuotePdf, quoteNumber } from "../../../lib/papers";
 
 const EXAMPLE = {
   token: "demo",
