@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabase, supabaseReady, money, when } from "../../../lib/shared";
 import { decodeQuote } from "../../../lib/demo";
+import { downloadQuotePdf, quoteNumber } from "../../../lib/quotePdf";
 
 const EXAMPLE = {
   token: "demo",
@@ -59,15 +60,19 @@ export default function Cliente({ params }) {
   return (
     <main className="shell quote-hero">
       <Link className="brand" href="/">Visi<span>ta</span></Link>
-      <p className="kicker">{quote.business_name}</p>
+      <p className="kicker">{quote.business_name} · {quoteNumber(quote)}</p>
       <h1>{quote.service_name}</h1>
-      <p className="muted">{quote.description}</p>
+      <p className="muted">Resumo do orçamento. O PDF é o mesmo papel, só mais formal.</p>
       <article className="card">
         <div className="split"><span>Cliente</span><b>{quote.client_name}</b></div>
         <div className="split"><span>Quando</span><b>{when(quote.scheduled_at)}</b></div>
         <div className="split"><span>Onde</span><b>{quote.address || "A combinar"}</b></div>
+        <div className="split"><span>Incluso</span><b>{quote.description || "Conforme conversa"}</b></div>
         <div className="split"><span>Total</span><b className="price">{money(quote.price_cents)}</b></div>
       </article>
+      <div className="row" style={{ marginTop: 16 }}>
+        <button className="btn-ghost" onClick={() => downloadQuotePdf(quote)}>Baixar PDF</button>
+      </div>
       {quote.status === "sent" && (
         <div className="row" style={{ marginTop: 16 }}>
           <button className="btn" onClick={() => decide("approved")}>Aprovar</button>
