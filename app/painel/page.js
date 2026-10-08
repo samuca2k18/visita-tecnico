@@ -52,23 +52,52 @@ export default function Painel() {
     if (!live) saveDemo(next);
   }
 
+  const [info, setInfo] = useState("");
+
+  function readCreds(e) {
+    const form = e?.currentTarget?.form || e?.currentTarget;
+    const fd = form && form.elements ? form : null;
+    const em = (fd?.elements?.email?.value ?? email).trim();
+    const pw = fd?.elements?.password?.value ?? password;
+    return { em, pw };
+  }
+
+  function traduz(msg) {
+    if (/anonymous sign-ins are disabled/i.test(msg)) return "Preencha o e-mail e a senha.";
+    if (/invalid login credentials/i.test(msg)) return "E-mail ou senha incorretos.";
+    if (/email not confirmed/i.test(msg)) return "Confirme seu e-mail antes de entrar (veja sua caixa de entrada).";
+    if (/already registered/i.test(msg)) return "Esse e-mail já tem conta. Use Entrar.";
+    if (/rate limit/i.test(msg)) return "Muitas tentativas. Espere alguns minutos e tente de novo.";
+    return msg;
+  }
+
   async function signIn(e) {
     e.preventDefault();
     setError("");
+    setInfo("");
+    const { em, pw } = readCreds(e);
+    if (!em || !pw) return setError("Preencha o e-mail e a senha.");
     const sb = getSupabase();
-    const { error: err } = await sb.auth.signInWithPassword({ email, password });
-    if (err) setError(err.message);
+    const { error: err } = await sb.auth.signInWithPassword({ email: em, password: pw });
+    if (err) setError(traduz(err.message));
   }
 
   async function signUp(e) {
     e.preventDefault();
     setError("");
+    setInfo("");
+    const { em, pw } = readCreds(e);
+    if (!em || !pw) return setError("Preencha o e-mail e a senha para criar a conta.");
+    if (pw.length < 6) return setError("A senha precisa ter pelo menos 6 caracteres.");
     const sb = getSupabase();
-    const { data: created, error: err } = await sb.auth.signUp({ email, password });
-    if (err) return setError(err.message);
-    if (created.user) {
-      await sb.from("profiles").insert({ id: created.user.id, business_name: "Meu serviço", city: "Fortaleza" });
-    }
+    const { data: created, error: err } = await sb.auth.signUp({
+      email: em,
+      password: pw,
+      options: { emailRedirectTo: `${window.location.origin}/painel` }
+    });
+    if (err) return setError(traduz(err.message));
+    // O perfil é criado por trigger no banco (auto_create_profile).
+    if (!created.session) setInfo("Conta criada! Confira seu e-mail para confirmar e depois clique em Entrar.");
   }
 
   async function saveProfile(profile) {
@@ -118,10 +147,11 @@ export default function Painel() {
           <div className="kicker">Técnico</div>
           <h2>Entrar</h2>
           <label>E-mail</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <input name="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           <label>Senha</label>
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
+          <input name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
           {error && <p className="error">{error}</p>}
+          {info && <p className="muted">{info}</p>}
           <div className="row" style={{ marginTop: 16 }}>
             <button className="btn" type="submit">Entrar</button>
             <button className="btn-ghost" type="button" onClick={signUp}>Criar conta</button>
