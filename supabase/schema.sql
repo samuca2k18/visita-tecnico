@@ -48,6 +48,8 @@ create policy "own services" on public.services
 create policy "own quotes" on public.quotes
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+alter table public.quotes add column if not exists items jsonb not null default '[]'::jsonb;
+
 create or replace function public.get_quote(t text)
 returns json
 language sql
@@ -58,6 +60,7 @@ as $$
     select
       quotes.token, quotes.client_name, quotes.address, quotes.service_name,
       quotes.description, quotes.price_cents, quotes.status, quotes.scheduled_at,
+      quotes.items,
       profiles.business_name, profiles.pix_key, profiles.phone as business_phone
     from quotes
     join profiles on profiles.id = quotes.user_id

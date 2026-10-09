@@ -197,6 +197,7 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
             <span className="pill">{STATUS[q.status]}</span>
           </div>
           <p className="small muted">{when(q.scheduled_at)} · {q.address || "sem endereço"}</p>
+          {Array.isArray(q.items) && q.items.length > 1 && <p className="small muted">{q.items.map((item) => (Number(item.qty) > 1 ? `${item.qty}× ` : "") + item.name).join(" · ")}</p>}
           <div className="split">
             <span className="price">{money(q.price_cents)}</span>
             <button className="btn-ghost" onClick={() => copy(q)}>{copied === q.token ? "Copiado" : "Copiar link"}</button>
@@ -213,20 +214,52 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
   );
 }
 
+function blankLine(services) {
+  const first = services[0];
+  return {
+    key: uid(),
+    pick: first?.name || "__outro",
+    name: first?.name || "",
+    price: first ? String(first.price_cents / 100) : "",
+    qty: "1"
+  };
+}
+
 function Novo({ data, addQuote }) {
-  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", service_name: data.services[0]?.name || "", description: "", price: "180", when: "" });
+  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", note: "", when: "" });
+  const [lines, setLines] = useState([blankLine(data.services)]);
   const [link, setLink] = useState("");
   function set(k, v) { setForm({ ...form, [k]: v }); }
+  function setLine(key, patch) {
+    setLines(lines.map((line) => line.key === key ? { ...line, ...patch } : line));
+  }
+  function pickService(key, value) {
+    if (value === "__outro") return setLine(key, { pick: value, name: "" });
+    const service = data.services.find((item) => item.name === value);
+    setLine(key, { pick: value, name: value, price: service ? String(service.price_cents / 100) : "" });
+  }
+  const total = lines.reduce((sum, line) => {
+    const qty = Math.max(1, Number(line.qty) || 1);
+    const price = Number(String(line.price).replace(",", ".")) || 0;
+    return sum + Math.round(price * 100) * qty;
+  }, 0);
   async function submit(e) {
     e.preventDefault();
-    const service = data.services.find((s) => s.name === form.service_name);
+    const items = lines.map((line) => ({
+      name: (line.pick === "__outro" ? line.name : line.pick).trim(),
+      qty: Math.max(1, Number(line.qty) || 1),
+      price_cents: Math.round(Number(String(line.price).replace(",", ".")) * 100) || 0
+    })).filter((item) => item.name);
+    if (!items.length) return;
+    const service_name = items.length === 1 ? items[0].name : `${items[0].name} e mais ${items.length - 1}`;
     const token = await addQuote({
       client_name: form.client_name,
       client_phone: form.client_phone,
       address: form.address,
-      service_name: form.service_name,
-      description: form.description || service?.description || "",
-      price_cents: Math.round(Number(form.price.replace(",", ".")) * 100),
+      service_name,
+      description: form.note,
+      price_cents: items.reduce((sum, item) => sum + item.price_cents * item.qty, 0),
+      items,
       scheduled_at: form.when ? new Date(form.when).toISOString() : null
     });
     setLink(`${window.location.origin}/o/${token}`);
@@ -239,19 +272,27 @@ function Novo({ data, addQuote }) {
       <input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} />
       <label>Endereço</label>
       <input value={form.address} onChange={(e) => set("address", e.target.value)} />
-      <label>Serviço</label>
-      <select value={form.service_name} onChange={(e) => {
-        const s = data.services.find((x) => x.name === e.target.value);
-        setForm({ ...form, service_name: e.target.value, price: s ? String(s.price_cents / 100) : form.price, description: s?.description || "" });
-      }}>
-        {data.services.map((s) => <option key={s.id}>{s.name}</option>)}
-      </select>
-      <label>Preço (R$)</label>
-      <input value={form.price} onChange={(e) => set("price", e.target.value)} required />
+      {lines.map((line, index) => (
+        <div key={line.key} style={{ marginTop: 12 }}>
+          <label>Serviço {lines.length > 1 ? index + 1 : ""}</label>
+          <select value={line.pick} onChange={(e) => pickService(line.key, e.target.value)}>
+            {data.services.map((service) => <option key={service.id} value={service.name}>{service.name}</option>)}
+            <option value="__outro">Outro</option>
+          </select>
+          {line.pick === "__outro" && <input placeholder="Nome do serviço" value={line.name} onChange={(e) => setLine(line.key, { name: e.target.value })} required style={{ marginTop: 8 }} />}
+          <div className="row" style={{ marginTop: 8 }}>
+            <input type="number" min="1" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} aria-label="Quantidade" style={{ width: 80 }} />
+            <input value={line.price} onChange={(e) => setLine(line.key, { price: e.target.value })} required placeholder="Preço (R$)" aria-label="Preço" />
+          </div>
+          {lines.length > 1 && <button className="btn-ghost" type="button" onClick={() => setLines(lines.filter((item) => item.key !== line.key))} style={{ marginTop: 8 }}>Tirar</button>}
+        </div>
+      ))}
+      <button className="btn-ghost" type="button" onClick={() => setLines([...lines, blankLine(data.services)])} style={{ marginTop: 12 }}>Adicionar serviço</button>
+      <p className="price" style={{ marginTop: 12 }}>Total {money(total)}</p>
       <label>Data e hora</label>
       <input type="datetime-local" value={form.when} onChange={(e) => set("when", e.target.value)} />
-      <label>O que está incluso</label>
-      <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
+      <label>Observação</label>
+      <textarea value={form.note} onChange={(e) => set("note", e.target.value)} />
       <button className="btn" style={{ marginTop: 14 }} type="submit">Gerar link</button>
       {link && <p>Manda isso no WhatsApp:<br /><a href={link}>{link}</a></p>}
     </form>
