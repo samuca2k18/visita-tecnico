@@ -29,6 +29,11 @@ export default function Painel() {
   }, [live]);
 
   useEffect(() => {
+    if (!live || !session?.user) return;
+    refresh();
+  }, [live, session?.user?.id]);
+
+  useEffect(() => {
     if (!data || live) return;
     const params = new URLSearchParams(window.location.search);
     const token = params.get("ok") || params.get("no");
