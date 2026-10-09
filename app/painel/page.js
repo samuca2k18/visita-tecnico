@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabase, supabaseReady, money, when, uid, STATUS } from "../../lib/shared";
-import { loadDemo, saveDemo, encodeQuote } from "../../lib/demo";
+import { loadDemo, saveDemo, encodeQuote, loadExtra, saveExtra, shrinkLogo } from "../../lib/demo";
 import { openPaper } from "../../lib/papers";
 
 export default function Painel() {
@@ -15,6 +15,7 @@ export default function Painel() {
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     if (!live) {
@@ -51,10 +52,11 @@ export default function Painel() {
       sb.from("services").select("*").eq("user_id", user.id).order("created_at"),
       sb.from("quotes").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
     ]);
+    const extra = loadExtra();
     setData({
-      profile: profile || { business_name: "Meu serviço", phone: "", pix_key: "", city: "Fortaleza" },
+      profile: { ...(profile || { business_name: "Meu serviço", phone: "", pix_key: "", city: "Fortaleza" }), ...extra.profile },
       services: services || [],
-      quotes: quotes || []
+      quotes: (quotes || []).map((q) => ({ ...q, ...(extra.quotes?.[q.token] || {}) }))
     });
   }
 
@@ -83,10 +85,64 @@ export default function Painel() {
   }
 
   async function saveProfile(profile) {
-    persist({ ...data, profile });
-    if (!live) return;
-    const { logo_data, cnpj, address_line, email, owner_name, ...base } = profile;
-    await getSupabase().from("profiles").upsert({ id: session.user.id, ...base });
+    setNotice("");
+    const logo_data = profile.logo_data?.startsWith("data:") ? await shrinkLogo(profile.logo_data) : profile.logo_data;
+    const next = { ...profile, logo_data };
+    const extra = loadExtra();
+    extra.profile = next;
+    saveExtra(extra);
+    persist({ ...data, profile: next });
+    if (!live) {
+      setNotice("Salvo neste aparelho.");
+      return;
+    }
+    const { error } = await getSupabase().from("profiles").upsert({
+      id: session.user.id,
+      business_name: next.business_name || "Meu serviço",
+      phone: next.phone || "",
+      pix_key: next.pix_key || "",
+      city: next.city || ""
+    });
+    setNotice(error ? "Salvo neste aparelho. No servidor: " + error.message : "Salvo.");
+  }
+
+  async function addQuote(quote) {
+    const token = uid();
+    const row = { ...quote, token, status: "sent" };
+    const extra = loadExtra();
+    extra.quotes = extra.quotes || {};
+    extra.quotes[token] = row;
+    saveExtra(extra);
+    if (!live) {
+      persist({ ...data, quotes: [row, ...data.quotes] });
+      return encodeQuote(row, data.profile);
+    }
+    const safe = {
+      user_id: session.user.id,
+      token,
+      client_name: row.client_name,
+      client_phone: row.client_phone || "",
+      address: row.address || "",
+      service_name: row.service_name,
+      description: row.description || "",
+      price_cents: row.price_cents || 0,
+      status: "sent",
+      scheduled_at: row.scheduled_at,
+      items: row.items || []
+    };
+    let { error } = await getSupabase().from("quotes").insert(safe);
+    if (error) {
+      delete safe.items;
+      const second = await getSupabase().from("quotes").insert(safe);
+      error = second.error;
+    }
+    if (error) {
+      setNotice("Não gravei no servidor: " + error.message + ". O link mesmo assim funciona neste aparelho.");
+      persist({ ...data, quotes: [row, ...data.quotes] });
+      return encodeQuote(row, data.profile);
+    }
+    await refresh();
+    return token;
   }
 
   async function addService(service) {
@@ -95,18 +151,6 @@ export default function Painel() {
       return refresh();
     }
     persist({ ...data, services: [...data.services, { ...service, id: uid(), active: true }] });
-  }
-
-  async function addQuote(quote) {
-    const token = uid();
-    const row = { ...quote, token, status: "sent" };
-    if (live) {
-      await getSupabase().from("quotes").insert({ ...row, user_id: session.user.id });
-      await refresh();
-      return token;
-    }
-    persist({ ...data, quotes: [row, ...data.quotes] });
-    return encodeQuote(row, data.profile);
   }
 
   async function setStatus(token, status) {
@@ -118,8 +162,7 @@ export default function Painel() {
   }
 
   function linkFor(q) {
-    const token = live ? q.token : encodeQuote(q, data.profile);
-    return `${window.location.origin}/o/${token}`;
+    return `${window.location.origin}/o/${encodeQuote(q, data.profile)}`;
   }
 
   if (!session) {
@@ -151,6 +194,7 @@ export default function Painel() {
         <Link className="brand" href="/">Visi<span>ta</span></Link>
         <span className="muted small">{live ? "Supabase" : "Ensaio neste aparelho"}</span>
       </div>
+      {notice && <p className="small">{notice}</p>}
       <div className="tabs">
         {["hoje", "novo", "servicos", "ajustes"].map((id) => (
           <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
@@ -161,7 +205,7 @@ export default function Painel() {
       {tab === "hoje" && <Hoje data={data} setStatus={setStatus} linkFor={linkFor} copied={copied} setCopied={setCopied} />}
       {tab === "novo" && <Novo data={data} addQuote={addQuote} linkForLive={live} />}
       {tab === "servicos" && <Servicos data={data} addService={addService} />}
-      {tab === "ajustes" && <Ajustes data={data} saveProfile={saveProfile} live={live} onOut={() => live ? getSupabase().auth.signOut() : null} />}
+      {tab === "ajustes" && <Ajustes data={data} saveProfile={saveProfile} live={live} notice={notice} onOut={() => live ? getSupabase().auth.signOut() : null} />}
     </main>
   );
 }
@@ -299,10 +343,11 @@ function Servicos({ data, addService }) {
   );
 }
 
-function Ajustes({ data, saveProfile, live, onOut }) {
+function Ajustes({ data, saveProfile, live, notice, onOut }) {
   const [profile, setProfile] = useState(data.profile);
+  const [saving, setSaving] = useState(false);
   return (
-    <form className="card" onSubmit={(e) => { e.preventDefault(); saveProfile(profile); }}>
+    <form className="card" onSubmit={async (e) => { e.preventDefault(); setSaving(true); await saveProfile(profile); setSaving(false); }}>
       <label>Nome no papel</label>
       <input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} />
       <label>Responsável</label>
@@ -328,7 +373,8 @@ function Ajustes({ data, saveProfile, live, onOut }) {
         reader.readAsDataURL(file);
       }} />
       {profile.logo_data && <img src={profile.logo_data} alt="Logo" style={{ height: 64, marginTop: 8 }} />}
-      <button className="btn" style={{ marginTop: 14 }} type="submit">Salvar</button>
+      <button className="btn" style={{ marginTop: 14 }} type="submit">{saving ? "Salvando" : "Salvar"}</button>
+      {notice && <p className="small">{notice}</p>}
       <p className="small muted">A logo fica só neste aparelho. No PDF entra no topo, se existir. A assinatura não vai pronta: o papel deixa o campo e recomenda assinar digitalmente.</p>
       <p className="small muted">{live ? "Conta ligada ao Supabase." : "Sem chave do Supabase: os dados ficam neste navegador. O link do cliente funciona em outro celular porque o orçamento vai dentro do próprio link."}</p>
       {live && <button className="btn-ghost" type="button" onClick={onOut}>Sair</button>}

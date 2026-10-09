@@ -54,12 +54,12 @@ export default function Cliente({ params }) {
   }, [params.token]);
 
   async function decide(status) {
-    if (quote.token === "demo" || String(params.token).startsWith("d.")) {
-      setQuote({ ...quote, status });
-      return;
+    const inner = quote.token;
+    setQuote({ ...quote, status });
+    if (supabaseReady() && inner && inner !== "demo") {
+      const { data } = await getSupabase().rpc("client_set_status", { t: inner, new_status: status });
+      if (data) setQuote({ ...quote, ...data, status });
     }
-    const { data } = await getSupabase().rpc("client_set_status", { t: params.token, new_status: status });
-    if (data) setQuote(data);
   }
 
   if (missing) return <main className="shell"><p>Orçamento não encontrado.</p></main>;
