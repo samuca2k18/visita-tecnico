@@ -29,9 +29,14 @@ export default function Painel() {
   }, [live]);
 
   useEffect(() => {
-    if (!live || !session?.user) return;
-    refresh();
-  }, [live, session?.user?.id]);
+    if (!data || live) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("ok") || params.get("no");
+    if (!token) return;
+    const status = params.get("ok") ? "approved" : "rejected";
+    persist({ ...data, quotes: data.quotes.map((q) => q.token === token ? { ...q, status } : q) });
+    window.history.replaceState({}, "", "/painel");
+  }, [data]);
 
   async function refresh() {
     const sb = getSupabase();
@@ -175,6 +180,7 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
           <div className="split">
             <span className="price">{money(q.price_cents)}</span>
             <button className="btn-ghost" onClick={() => copy(q)}>{copied === q.token ? "Copiado" : "Copiar link"}</button>
+            <a className="btn" href={whatsApp(q.client_phone, `Orçamento ${q.service_name}: ${linkFor(q)}`)}>WhatsApp</a>
           </div>
             <div className="row" style={{ marginTop: 8 }}>
               <button className="btn-ghost" onClick={() => openPaper("orcamento", q, data.profile)}>PDF orçamento</button>
@@ -188,22 +194,34 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
   );
 }
 
+function whatsApp(phone, text) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  const full = digits.length <= 11 ? "55" + digits : digits;
+  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
+}
+
 function Novo({ data, addQuote }) {
-  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", service_name: data.services[0]?.name || "", description: "", price: "180", when: "", deadline: "A combinar", payment: "À vista, PIX" });
+  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", service_name: "", description: "", when: "", deadline: "A combinar", payment: "À vista, PIX", items: [{ name: "", price: "" }] });
   const [link, setLink] = useState("");
   function set(k, v) { setForm({ ...form, [k]: v }); }
+  function setItem(i, k, v) {
+    const items = form.items.map((item, idx) => idx === i ? { ...item, [k]: v } : item);
+    setForm({ ...form, items });
+  }
+  const total = form.items.reduce((sum, item) => sum + Math.round(Number(String(item.price).replace(",", ".")) * 100 || 0), 0);
   async function submit(e) {
     e.preventDefault();
-    const service = data.services.find((s) => s.name === form.service_name);
+    const items = form.items.filter((item) => item.name).map((item) => ({ name: item.name, price_cents: Math.round(Number(String(item.price).replace(",", ".")) * 100 || 0) }));
     const token = await addQuote({
       client_name: form.client_name,
       client_phone: form.client_phone,
       address: form.address,
-      service_name: form.service_name,
-      description: form.description || service?.description || "",
+      service_name: form.service_name || items[0]?.name || "Serviço",
+      description: form.description,
       deadline: form.deadline || "A combinar",
       payment: form.payment || "À vista, PIX",
-      price_cents: Math.round(Number(form.price.replace(",", ".")) * 100),
+      items,
+      price_cents: total,
       scheduled_at: form.when ? new Date(form.when).toISOString() : null
     });
     setLink(`${window.location.origin}/o/${token}`);
@@ -212,21 +230,28 @@ function Novo({ data, addQuote }) {
     <form className="card" onSubmit={submit}>
       <label>Cliente</label>
       <input value={form.client_name} onChange={(e) => set("client_name", e.target.value)} required />
-      <label>Telefone</label>
-      <input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} />
+      <label>Telefone do cliente</label>
+      <input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} placeholder="85 99999-0000" />
       <label>Endereço</label>
       <input value={form.address} onChange={(e) => set("address", e.target.value)} />
-      <label>Serviço, o que vai no papel</label>
-      <input value={form.service_name} onChange={(e) => set("service_name", e.target.value)} required placeholder="Transporte e afinação" />
+      <label>Objeto</label>
+      <input value={form.service_name} onChange={(e) => set("service_name", e.target.value)} placeholder="Piano Fritz Dobbert" />
+      <label>Linhas do orçamento</label>
+      {form.items.map((item, i) => (
+        <div className="row" key={i} style={{ marginBottom: 8 }}>
+          <input placeholder="Serviço" value={item.name} onChange={(e) => setItem(i, "name", e.target.value)} />
+          <input placeholder="Valor" value={item.price} onChange={(e) => setItem(i, "price", e.target.value)} style={{ maxWidth: 120 }} />
+        </div>
+      ))}
+      <button className="btn-ghost" type="button" onClick={() => set("items", [...form.items, { name: "", price: "" }])}>Mais uma linha</button>
+      <p className="price">Total {money(total)}</p>
       <label>Prazo</label>
       <input value={form.deadline} onChange={(e) => set("deadline", e.target.value)} placeholder="25 dias" />
       <label>Pagamento</label>
       <input value={form.payment} onChange={(e) => set("payment", e.target.value)} />
-      <label>Preço (R$)</label>
-      <input value={form.price} onChange={(e) => set("price", e.target.value)} required />
-      <label>Data e hora</label>
+      <label>Data da visita</label>
       <input type="datetime-local" value={form.when} onChange={(e) => set("when", e.target.value)} />
-      <label>O que está incluso</label>
+      <label>Observação</label>
       <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
       <button className="btn" style={{ marginTop: 14 }} type="submit">Gerar link</button>
       {link && <p>Manda isso no WhatsApp:<br /><a href={link}>{link}</a></p>}

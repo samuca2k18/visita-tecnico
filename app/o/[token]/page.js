@@ -20,6 +20,14 @@ const EXAMPLE = {
   business_phone: "85999990000"
 };
 
+function avisar(quote, kind) {
+  const back = `${window.location.origin}/painel?${kind}=${quote.token}`;
+  const text = kind === "ok" ? `Aprovei o orçamento. ${back}` : `Recusei o orçamento. ${back}`;
+  const digits = String(quote.business_phone || "").replace(/\D/g, "");
+  const full = digits.length <= 11 ? "55" + digits : digits;
+  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
+}
+
 export default function Cliente({ params }) {
   const [quote, setQuote] = useState(null);
   const [missing, setMissing] = useState(false);
@@ -61,20 +69,13 @@ export default function Cliente({ params }) {
     <main className="shell quote-hero">
       <Link className="brand" href="/">Visi<span>ta</span></Link>
       <p className="kicker">{quote.business_name} · {quoteNumber(quote)}</p>
-      <h1>{(quote.items || []).length > 1 ? "Serviços da visita" : quote.service_name}</h1>
+      <h1>{quote.service_name}</h1>
       <p className="muted">Resumo do orçamento. O PDF é o mesmo papel, só mais formal.</p>
       <article className="card">
         <div className="split"><span>Cliente</span><b>{quote.client_name}</b></div>
         <div className="split"><span>Quando</span><b>{when(quote.scheduled_at)}</b></div>
         <div className="split"><span>Onde</span><b>{quote.address || "A combinar"}</b></div>
-        {(quote.items || []).length > 0
-          ? quote.items.map((item, i) => (
-            <div className="split" key={i}>
-              <span>{Number(item.qty) > 1 ? `${item.qty}× ` : ""}{item.name}</span>
-              <b>{money((Number(item.price_cents) || 0) * (Number(item.qty) || 1))}</b>
-            </div>
-          ))
-          : <div className="split"><span>Incluso</span><b>{quote.description || quote.service_name || "Conforme conversa"}</b></div>}
+        <div className="split"><span>Incluso</span><b>{quote.description || "Conforme conversa"}</b></div>
         <div className="split"><span>Total</span><b className="price">{money(quote.price_cents)}</b></div>
       </article>
       <div className="row" style={{ marginTop: 16 }}>
@@ -90,10 +91,10 @@ export default function Cliente({ params }) {
         <article className="card" style={{ marginTop: 16 }}>
           <div className="kicker ok">Aprovado</div>
           <p>PIX: <b>{quote.pix_key || "o técnico manda no WhatsApp"}</b></p>
-          <p className="small muted">Pagamento por fora. Guarda o comprovante.</p>
+          <button className="btn" onClick={() => { window.location.href = avisar(quote, "ok"); }}>Avisar o técnico</button>
         </article>
       )}
-      {quote.status === "rejected" && <p className="no">Recusado. Pode chamar o técnico se mudou de ideia.</p>}
+      {quote.status === "rejected" && <button className="btn-ghost" onClick={() => { window.location.href = avisar(quote, "no"); }}>Avisar que recusou</button>}
       {["done", "paid"].includes(quote.status) && <p className="ok">Serviço {quote.status === "paid" ? "pago" : "marcado como feito"}.</p>}
     </main>
   );

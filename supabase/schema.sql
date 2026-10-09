@@ -6,7 +6,11 @@ create table if not exists public.profiles (
   business_name text not null default 'Meu serviço',
   phone text default '',
   pix_key text default '',
-  city text default 'Fortaleza'
+  city text default 'Fortaleza',
+  cnpj text default '',
+  address_line text default '',
+  email text default '',
+  owner_name text default ''
 );
 
 create table if not exists public.services (
@@ -31,6 +35,8 @@ create table if not exists public.quotes (
   price_cents integer not null,
   status text not null default 'sent' check (status in ('sent','approved','rejected','done','paid')),
   scheduled_at timestamptz,
+  deadline text default '',
+  payment text default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
