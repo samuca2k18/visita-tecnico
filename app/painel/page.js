@@ -13,7 +13,6 @@ export default function Painel() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState("");
 
@@ -33,6 +32,16 @@ export default function Painel() {
     if (!live || !session?.user) return;
     refresh();
   }, [live, session?.user?.id]);
+
+  useEffect(() => {
+    if (!data || live) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("ok") || params.get("no");
+    if (!token) return;
+    const status = params.get("ok") ? "approved" : "rejected";
+    persist({ ...data, quotes: data.quotes.map((q) => q.token === token ? { ...q, status } : q) });
+    window.history.replaceState({}, "", "/painel");
+  }, [data]);
 
   async function refresh() {
     const sb = getSupabase();
@@ -54,46 +63,23 @@ export default function Painel() {
     if (!live) saveDemo(next);
   }
 
-  function readCreds(e) {
-    const form = e?.currentTarget?.form || e?.currentTarget;
-    const em = (form?.elements?.email?.value ?? email).trim();
-    const pw = form?.elements?.password?.value ?? password;
-    return { em, pw };
-  }
-
-  function traduz(msg) {
-    if (/email rate limit/i.test(msg)) return "O Supabase limitou o envio de e-mail. Espera cerca de uma hora, ou entra com a conta que já existe.";
-    if (/anonymous sign-ins are disabled/i.test(msg)) return "Preencha o e-mail e a senha.";
-    if (/invalid login credentials/i.test(msg)) return "E-mail ou senha incorretos.";
-    if (/email not confirmed/i.test(msg)) return "Confirme seu e-mail antes de entrar.";
-    if (/already registered/i.test(msg)) return "Esse e-mail já tem conta. Use Entrar.";
-    return msg;
-  }
-
   async function signIn(e) {
     e.preventDefault();
     setError("");
-    setInfo("");
-    const { em, pw } = readCreds(e);
-    if (!em || !pw) return setError("Preencha o e-mail e a senha.");
     const sb = getSupabase();
-    const { error: err } = await sb.auth.signInWithPassword({ email: em, password: pw });
-    if (err) setError(traduz(err.message));
+    const { error: err } = await sb.auth.signInWithPassword({ email, password });
+    if (err) setError(err.message);
   }
 
   async function signUp(e) {
     e.preventDefault();
     setError("");
-    setInfo("");
-    const { em, pw } = readCreds(e);
-    if (!em || !pw) return setError("Preencha o e-mail e a senha para criar a conta.");
-    if (pw.length < 6) return setError("A senha precisa ter pelo menos 6 caracteres.");
     const sb = getSupabase();
-    const { data, error: err } = await sb.functions.invoke("criar-conta", { body: { email: em, password: pw } });
-    if (err) return setError("Não consegui criar a conta agora. Tenta de novo em alguns minutos.");
-    if (data?.error) return setError(data.error);
-    const { error: inErr } = await sb.auth.signInWithPassword({ email: em, password: pw });
-    if (inErr) setError(traduz(inErr.message));
+    const { data: created, error: err } = await sb.auth.signUp({ email, password });
+    if (err) return setError(err.message);
+    if (created.user) {
+      await sb.from("profiles").insert({ id: created.user.id, business_name: "Meu serviço", city: "Fortaleza" });
+    }
   }
 
   async function saveProfile(profile) {
@@ -144,11 +130,10 @@ export default function Painel() {
           <div className="kicker">Técnico</div>
           <h2>Entrar</h2>
           <label>E-mail</label>
-          <input name="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           <label>Senha</label>
-          <input name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
           {error && <p className="error">{error}</p>}
-          {info && <p className="muted">{info}</p>}
           <div className="row" style={{ marginTop: 16 }}>
             <button className="btn" type="submit">Entrar</button>
             <button className="btn-ghost" type="button" onClick={signUp}>Criar conta</button>
@@ -197,10 +182,10 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
             <span className="pill">{STATUS[q.status]}</span>
           </div>
           <p className="small muted">{when(q.scheduled_at)} · {q.address || "sem endereço"}</p>
-          {Array.isArray(q.items) && q.items.length > 1 && <p className="small muted">{q.items.map((item) => (Number(item.qty) > 1 ? `${item.qty}× ` : "") + item.name).join(" · ")}</p>}
           <div className="split">
             <span className="price">{money(q.price_cents)}</span>
             <button className="btn-ghost" onClick={() => copy(q)}>{copied === q.token ? "Copiado" : "Copiar link"}</button>
+            <a className="btn" href={whatsApp(q.client_phone, `Orçamento ${q.service_name}: ${linkFor(q)}`)}>WhatsApp</a>
           </div>
             <div className="row" style={{ marginTop: 8 }}>
               <button className="btn-ghost" onClick={() => openPaper("orcamento", q, data.profile)}>PDF orçamento</button>
@@ -214,52 +199,34 @@ function Hoje({ data, setStatus, linkFor, copied, setCopied }) {
   );
 }
 
-function blankLine(services) {
-  const first = services[0];
-  return {
-    key: uid(),
-    pick: first?.name || "__outro",
-    name: first?.name || "",
-    price: first ? String(first.price_cents / 100) : "",
-    qty: "1"
-  };
+function whatsApp(phone, text) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  const full = digits.length <= 11 ? "55" + digits : digits;
+  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
 }
 
 function Novo({ data, addQuote }) {
-  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", note: "", when: "" });
-  const [lines, setLines] = useState([blankLine(data.services)]);
+  const [form, setForm] = useState({ client_name: "", client_phone: "", address: "", service_name: "", description: "", when: "", deadline: "A combinar", payment: "À vista, PIX", items: [{ name: "", price: "" }] });
   const [link, setLink] = useState("");
   function set(k, v) { setForm({ ...form, [k]: v }); }
-  function setLine(key, patch) {
-    setLines(lines.map((line) => line.key === key ? { ...line, ...patch } : line));
+  function setItem(i, k, v) {
+    const items = form.items.map((item, idx) => idx === i ? { ...item, [k]: v } : item);
+    setForm({ ...form, items });
   }
-  function pickService(key, value) {
-    if (value === "__outro") return setLine(key, { pick: value, name: "" });
-    const service = data.services.find((item) => item.name === value);
-    setLine(key, { pick: value, name: value, price: service ? String(service.price_cents / 100) : "" });
-  }
-  const total = lines.reduce((sum, line) => {
-    const qty = Math.max(1, Number(line.qty) || 1);
-    const price = Number(String(line.price).replace(",", ".")) || 0;
-    return sum + Math.round(price * 100) * qty;
-  }, 0);
+  const total = form.items.reduce((sum, item) => sum + Math.round(Number(String(item.price).replace(",", ".")) * 100 || 0), 0);
   async function submit(e) {
     e.preventDefault();
-    const items = lines.map((line) => ({
-      name: (line.pick === "__outro" ? line.name : line.pick).trim(),
-      qty: Math.max(1, Number(line.qty) || 1),
-      price_cents: Math.round(Number(String(line.price).replace(",", ".")) * 100) || 0
-    })).filter((item) => item.name);
-    if (!items.length) return;
-    const service_name = items.length === 1 ? items[0].name : `${items[0].name} e mais ${items.length - 1}`;
+    const items = form.items.filter((item) => item.name).map((item) => ({ name: item.name, price_cents: Math.round(Number(String(item.price).replace(",", ".")) * 100 || 0) }));
     const token = await addQuote({
       client_name: form.client_name,
       client_phone: form.client_phone,
       address: form.address,
-      service_name,
-      description: form.note,
-      price_cents: items.reduce((sum, item) => sum + item.price_cents * item.qty, 0),
+      service_name: form.service_name || items[0]?.name || "Serviço",
+      description: form.description,
+      deadline: form.deadline || "A combinar",
+      payment: form.payment || "À vista, PIX",
       items,
+      price_cents: total,
       scheduled_at: form.when ? new Date(form.when).toISOString() : null
     });
     setLink(`${window.location.origin}/o/${token}`);
@@ -268,31 +235,39 @@ function Novo({ data, addQuote }) {
     <form className="card" onSubmit={submit}>
       <label>Cliente</label>
       <input value={form.client_name} onChange={(e) => set("client_name", e.target.value)} required />
-      <label>Telefone</label>
-      <input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} />
+      <label>Telefone do cliente</label>
+      <input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} placeholder="85 99999-0000" />
       <label>Endereço</label>
       <input value={form.address} onChange={(e) => set("address", e.target.value)} />
-      {lines.map((line, index) => (
-        <div key={line.key} style={{ marginTop: 12 }}>
-          <label>Serviço {lines.length > 1 ? index + 1 : ""}</label>
-          <select value={line.pick} onChange={(e) => pickService(line.key, e.target.value)}>
-            {data.services.map((service) => <option key={service.id} value={service.name}>{service.name}</option>)}
-            <option value="__outro">Outro</option>
-          </select>
-          {line.pick === "__outro" && <input placeholder="Nome do serviço" value={line.name} onChange={(e) => setLine(line.key, { name: e.target.value })} required style={{ marginTop: 8 }} />}
-          <div className="row" style={{ marginTop: 8 }}>
-            <input type="number" min="1" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} aria-label="Quantidade" style={{ width: 80 }} />
-            <input value={line.price} onChange={(e) => setLine(line.key, { price: e.target.value })} required placeholder="Preço (R$)" aria-label="Preço" />
-          </div>
-          {lines.length > 1 && <button className="btn-ghost" type="button" onClick={() => setLines(lines.filter((item) => item.key !== line.key))} style={{ marginTop: 8 }}>Tirar</button>}
+      <label>Objeto</label>
+      <input value={form.service_name} onChange={(e) => set("service_name", e.target.value)} placeholder="Piano Fritz Dobbert" />
+      <label>Linhas do orçamento</label>
+      {data.services.length > 0 && (
+        <select value="" onChange={(e) => {
+          const service = data.services.find((s) => s.id === e.target.value);
+          if (!service) return;
+          set("items", [...form.items.filter((item) => item.name), { name: service.name, price: String(service.price_cents / 100) }]);
+        }}>
+          <option value="">Adicionar um serviço recorrente</option>
+          {data.services.map((s) => <option key={s.id} value={s.id}>{s.name} · {money(s.price_cents)}</option>)}
+        </select>
+      )}
+      {form.items.map((item, i) => (
+        <div className="row" key={i} style={{ marginBottom: 8 }}>
+          <input placeholder="Serviço" value={item.name} onChange={(e) => setItem(i, "name", e.target.value)} />
+          <input placeholder="Valor" value={item.price} onChange={(e) => setItem(i, "price", e.target.value)} style={{ maxWidth: 120 }} />
         </div>
       ))}
-      <button className="btn-ghost" type="button" onClick={() => setLines([...lines, blankLine(data.services)])} style={{ marginTop: 12 }}>Adicionar serviço</button>
-      <p className="price" style={{ marginTop: 12 }}>Total {money(total)}</p>
-      <label>Data e hora</label>
+      <button className="btn-ghost" type="button" onClick={() => set("items", [...form.items, { name: "", price: "" }])}>Mais uma linha</button>
+      <p className="price">Total {money(total)}</p>
+      <label>Prazo</label>
+      <input value={form.deadline} onChange={(e) => set("deadline", e.target.value)} placeholder="25 dias" />
+      <label>Pagamento</label>
+      <input value={form.payment} onChange={(e) => set("payment", e.target.value)} />
+      <label>Data da visita</label>
       <input type="datetime-local" value={form.when} onChange={(e) => set("when", e.target.value)} />
       <label>Observação</label>
-      <textarea value={form.note} onChange={(e) => set("note", e.target.value)} />
+      <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
       <button className="btn" style={{ marginTop: 14 }} type="submit">Gerar link</button>
       {link && <p>Manda isso no WhatsApp:<br /><a href={link}>{link}</a></p>}
     </form>
