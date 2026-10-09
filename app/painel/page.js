@@ -242,6 +242,16 @@ function Novo({ data, addQuote }) {
       <label>Objeto</label>
       <input value={form.service_name} onChange={(e) => set("service_name", e.target.value)} placeholder="Piano Fritz Dobbert" />
       <label>Linhas do orçamento</label>
+      {data.services.length > 0 && (
+        <select value="" onChange={(e) => {
+          const service = data.services.find((s) => s.id === e.target.value);
+          if (!service) return;
+          set("items", [...form.items.filter((item) => item.name), { name: service.name, price: String(service.price_cents / 100) }]);
+        }}>
+          <option value="">Adicionar um serviço recorrente</option>
+          {data.services.map((s) => <option key={s.id} value={s.id}>{s.name} · {money(s.price_cents)}</option>)}
+        </select>
+      )}
       {form.items.map((item, i) => (
         <div className="row" key={i} style={{ marginBottom: 8 }}>
           <input placeholder="Serviço" value={item.name} onChange={(e) => setItem(i, "name", e.target.value)} />
