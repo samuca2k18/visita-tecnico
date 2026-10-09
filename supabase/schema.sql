@@ -89,3 +89,29 @@ $$;
 
 grant execute on function public.get_quote(text) to anon, authenticated;
 grant execute on function public.client_set_status(text, text) to anon, authenticated;
+
+-- Perfil automático para cada usuário novo.
+-- Sem perfil, get_quote (join com profiles) devolve null e o link do cliente não abre.
+-- A edge function criar-conta confirma o e-mail, mas ainda não cria a linha em profiles.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.profiles (id) values (new.id) on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+insert into public.profiles (id)
+select id from auth.users
+on conflict (id) do nothing;
