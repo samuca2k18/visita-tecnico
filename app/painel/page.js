@@ -9,6 +9,9 @@ import {
 import { loadDemo, saveDemo, encodeQuote, loadExtra, saveExtra, shrinkLogo } from "../../lib/demo";
 import { openPaper } from "../../lib/papers";
 import { Brand, BrandMark, Icon, WhatsAppIcon } from "../../lib/icons";
+import { reminderText, reminderLabel } from "../../lib/lembrete";
+import { PhotoBox, MAX_PHOTOS } from "../../components/Fotos";
+import Relatorio from "../../components/Relatorio";
 
 const PROFILE_FIELDS = ["business_name", "owner_name", "cnpj", "address_line", "city", "phone", "email", "pix_key", "logo_data"];
 const DEFAULT_PROFILE = { business_name: "Meu serviço", owner_name: "", cnpj: "", address_line: "", city: "Fortaleza", phone: "", email: "", pix_key: "", logo_data: "" };
@@ -79,10 +82,11 @@ export default function Painel() {
   async function refresh() {
     const sb = getSupabase();
     const user = session.user;
-    const [p, s, q] = await Promise.all([
+    const [p, s, q, f] = await Promise.all([
       sb.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       sb.from("services").select("*").eq("user_id", user.id).order("created_at"),
-      sb.from("quotes").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
+      sb.from("quotes").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      sb.from("quote_photos").select("id, quote_token, kind, path, created_at").eq("user_id", user.id).order("created_at")
     ]);
     const err = p.error || s.error || q.error;
     if (err) say("Não consegui carregar tudo do servidor: " + traduz(err.message), true);
@@ -102,6 +106,7 @@ export default function Painel() {
     setData({
       profile: merged,
       services: s.data || [],
+      photos: f.data || [],
       quotes: (q.data || []).map((row) => {
         const old = extra.quotes?.[row.token] || {};
         return { ...row, deadline: row.deadline || old.deadline || "", payment: row.payment || old.payment || "" };
@@ -272,6 +277,7 @@ export default function Painel() {
 
   const tabs = [
     ["hoje", "Hoje", "today"],
+    ["relatorio", "Relatório", "chart"],
     ["novo", "Novo", "plus"],
     ["servicos", "Serviços", "wrench"],
     ["ajustes", "Ajustes", "gear"]
@@ -300,7 +306,8 @@ export default function Painel() {
             <button className="link" onClick={() => say("")}>fechar</button>
           </div>
         )}
-        {tab === "hoje" && <Hoje data={data} setStatus={setStatus} updateQuote={updateQuote} linkFor={linkFor} duplicate={duplicate} goNovo={() => setTab("novo")} />}
+        {tab === "hoje" && <Hoje data={data} live={live} userId={session?.user?.id} refresh={refresh} setStatus={setStatus} updateQuote={updateQuote} linkFor={linkFor} duplicate={duplicate} goNovo={() => setTab("novo")} />}
+        {tab === "relatorio" && <Relatorio quotes={data.quotes} />}
         {tab === "novo" && (
           <Novo key={draftKey} data={data} initial={draft} addQuote={addQuote} onDone={() => setDraft(null)} goHoje={() => setTab("hoje")} />
         )}
@@ -348,9 +355,11 @@ function Empty({ icon, title, text, action, onAction }) {
   );
 }
 
-function Hoje({ data, setStatus, updateQuote, linkFor, duplicate, goNovo }) {
+function Hoje({ data, live, userId, refresh, setStatus, updateQuote, linkFor, duplicate, goNovo }) {
   const [filter, setFilter] = useState("proximos");
   const [editing, setEditing] = useState("");
+  const [photosOf, setPhotosOf] = useState("");
+  const photos = data.photos || [];
   const [copied, setCopied] = useState("");
   const today = dayKey(new Date());
 
@@ -435,6 +444,10 @@ function Hoje({ data, setStatus, updateQuote, linkFor, duplicate, goNovo }) {
           const step = next[q.status];
           const isToday = q.scheduled_at && dayKey(q.scheduled_at) === today;
           const primaryCount = (wa ? 1 : 0) + (step ? 1 : 0);
+          const remLabel = reminderLabel(q);
+          const remText = remLabel ? reminderText(q, linkFor(q), data.profile) : "";
+          const remLink = remText ? whatsAppLink(q.client_phone, remText) : "";
+          const nPhotos = photos.filter((p) => p.quote_token === q.token).length;
           const copyBtn = (cls) => (
             <button className={cls} onClick={() => copy(q)}><Icon name={copied === q.token ? "check" : "link"} />{copied === q.token ? "Copiado" : "Copiar link"}</button>
           );
@@ -467,14 +480,20 @@ function Hoje({ data, setStatus, updateQuote, linkFor, duplicate, goNovo }) {
               </div>
               <details className="qcard-more">
                 <summary>Mais opções <Icon name="chevron" /></summary>
+                {remLabel && !remLink && (
+                  <p className="wa-hint">{q.client_phone ? "O telefone do cliente não parece válido pro WhatsApp." : "Sem WhatsApp do cliente."} Toque em Editar e coloque com DDD pra mandar lembrete.</p>
+                )}
                 <div className="row">
+                  {remLink && <a className="btn-wa small" href={remLink} target="_blank" rel="noreferrer"><Icon name="bell" />{remLabel}</a>}
                   {primaryCount >= 2 && copyBtn("btn-ghost small")}
                   <button className="btn-ghost small" onClick={() => openPaper("orcamento", q, data.profile)}><Icon name="file" />PDF orçamento</button>
                   <button className="btn-ghost small" onClick={() => openPaper("recibo", q, data.profile)}><Icon name="receipt" />PDF recibo</button>
                   <button className="btn-ghost small" onClick={() => setEditing(q.token)}><Icon name="edit" />Editar</button>
                   <button className="btn-ghost small" onClick={() => duplicate(q)}><Icon name="dup" />Duplicar</button>
+                  {live && <button className={(photosOf === q.token ? "btn-soft" : "btn-ghost") + " small"} aria-expanded={photosOf === q.token} onClick={() => setPhotosOf(photosOf === q.token ? "" : q.token)}><Icon name="camera" />Fotos{nPhotos ? ` (${nPhotos}/${MAX_PHOTOS})` : ""}</button>}
                   {["sent", "approved"].includes(q.status) && <button className="btn-danger small" onClick={() => cancel(q)}><Icon name="x" />Cancelar</button>}
                 </div>
+                {live && photosOf === q.token && <PhotoBox quote={q} userId={userId} photos={photos} onChange={refresh} />}
               </details>
             </article>
           );
