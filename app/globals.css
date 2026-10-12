@@ -66,3 +66,26 @@ textarea { min-height: 80px; }
 @media (max-width: 760px) {
   .grid { grid-template-columns: 1fr; }
 }
+.split { flex-wrap: wrap; }
+.split > b { min-width: 0; overflow-wrap: anywhere; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chips button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px; color: var(--muted); font-size: 13px; }
+.chips button.on { background: var(--amber); color: #1a1408; border-color: var(--amber); }
+.line { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+.line input { min-width: 0; }
+.line .qty { width: 52px; flex: none; text-align: center; padding: 12px 6px; }
+.line .val { width: 110px; flex: none; }
+.line .x { flex: none; padding: 10px 14px; }
+.btn.small, .btn-ghost.small { padding: 8px 12px; font-size: 13px; }
+.btn-ghost.no { color: var(--bad); }
+.btn[disabled], .btn-ghost[disabled] { opacity: 0.6; cursor: default; }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
+.pill.approved, .pill.paid { color: var(--good); }
+.pill.rejected { color: var(--bad); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.item .split + .split { margin-top: 6px; }
+@media (max-width: 400px) {
+  .line { flex-wrap: wrap; }
+  .line input:first-child { flex: 1 1 100%; }
+  .line .val { flex: 1 1 auto; width: auto; }
+}

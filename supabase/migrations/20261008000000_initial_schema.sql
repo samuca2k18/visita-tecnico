@@ -1,0 +1,3 @@
+-- Já aplicado no projeto (08/10/2026): tabelas, RLS, items, get_quote, client_set_status e o
+-- gatilho que cria o perfil. O estado completo está em supabase/schema.sql.
+-- Mantido aqui só como marco; não rode de novo num projeto existente.
