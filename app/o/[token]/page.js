@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getSupabase, supabaseReady, money, when, itemsOf, lineQty, lineTotal, whatsAppLink } from "../../../lib/shared";
+import { getSupabase, supabaseReady, money, when, itemsOf, lineQty, lineTotal, whatsAppLink, formatPhone, STATUS } from "../../../lib/shared";
+import { Icon, WhatsAppIcon } from "../../../lib/icons";
 import { decodeQuote } from "../../../lib/demo";
 import { downloadQuotePdf, quoteNumber } from "../../../lib/papers";
 
@@ -94,54 +95,104 @@ export default function Cliente({ params }) {
     }
   }
 
-  if (missing) return <main className="shell"><p>Orçamento não encontrado. Confere o link com quem te mandou.</p></main>;
-  if (!quote) return <main className="shell"><p className="muted">Abrindo orçamento.</p></main>;
+  if (missing) {
+    return (
+      <main className="client">
+        <div className="empty" style={{ marginTop: 40 }}>
+          <div className="ico"><Icon name="info" /></div>
+          <h3>Orçamento não encontrado</h3>
+          <p>Confere o link com quem te mandou.</p>
+        </div>
+      </main>
+    );
+  }
+  if (!quote) return <main className="client"><p className="muted" style={{ marginTop: 40, textAlign: "center" }}>Abrindo orçamento…</p></main>;
 
   const items = itemsOf(quote);
   const okLink = quote.status === "approved" ? avisar("ok") : "";
   const noLink = quote.status === "rejected" ? avisar("no") : "";
+  const banner = {
+    sent: ["clock", "Aguardando sua resposta", "Confira os itens e aprove ou recuse abaixo."],
+    approved: ["check", "Orçamento aprovado", "Obrigado! Combine os detalhes com o técnico."],
+    rejected: ["x", "Orçamento recusado ou cancelado", "Se mudou de ideia, fale com o técnico."],
+    done: ["check", "Serviço feito", "O técnico marcou este serviço como concluído."],
+    paid: ["check", "Serviço pago", "Pagamento confirmado. Obrigado!"]
+  }[quote.status] || ["info", STATUS[quote.status] || quote.status, ""];
+  const contact = [quote.city, formatPhone(quote.business_phone)].filter(Boolean).join(" · ");
 
   return (
-    <main className="shell quote-hero">
-      <Link className="brand" href="/">Visi<span>ta</span></Link>
-      {quote.logo_data && <img src={quote.logo_data} alt="" style={{ height: 48, display: "block", marginTop: 12 }} />}
-      <p className="kicker">{quote.business_name} · {quoteNumber(quote)}</p>
-      <h1>{quote.service_name}</h1>
-      {quote.example && <p className="small muted">Orçamento de exemplo. Os dados são fictícios.</p>}
-      <article className="card">
-        <div className="split"><span>Cliente</span><b>{quote.client_name}</b></div>
-        <div className="split"><span>Quando</span><b>{when(quote.scheduled_at)}</b></div>
-        <div className="split"><span>Onde</span><b>{quote.address || "A combinar"}</b></div>
-        {items.map((item, i) => (
-          <div className="split" key={i}><span>{lineQty(item) > 1 ? `${lineQty(item)}× ` : ""}{item.name}</span><b>{money(lineTotal(item))}</b></div>
-        ))}
-        {quote.description && <div className="split"><span>Observação</span><b>{quote.description}</b></div>}
-        {quote.deadline && <div className="split"><span>Prazo</span><b>{quote.deadline}</b></div>}
-        {quote.payment && <div className="split"><span>Pagamento</span><b>{quote.payment}</b></div>}
-        <div className="split"><span>Total</span><b className="price">{money(quote.price_cents)}</b></div>
+    <main className="client">
+      <article className="card client-head">
+        {quote.logo_data
+          ? <img className="logo" src={quote.logo_data} alt="" />
+          : <div className="initial" aria-hidden="true">{String(quote.business_name || "?").trim().charAt(0).toUpperCase()}</div>}
+        <div style={{ minWidth: 0 }}>
+          <h1>{quote.business_name}</h1>
+          <p>{[quote.cnpj && "CNPJ " + quote.cnpj, contact].filter(Boolean).join(" · ") || "Orçamento de serviço"}</p>
+        </div>
       </article>
-      <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn-ghost" onClick={() => downloadQuotePdf(quote)}>Baixar PDF</button>
+
+      {quote.example && <p className="small muted" style={{ textAlign: "center", margin: "12px 0 0" }}>Orçamento de exemplo. Os dados são fictícios.</p>}
+
+      <div className={"banner " + quote.status} role="status">
+        <Icon name={banner[0]} />
+        <div>{banner[1]}{banner[2] && <small>{banner[2]}</small>}</div>
       </div>
-      {msg && <p className="error">{msg}</p>}
+
+      <article className="card doc">
+        <div className="doc-title">
+          <div className="kicker">Orçamento {quoteNumber(quote)}</div>
+          <h2>{quote.service_name}</h2>
+        </div>
+        <div className="facts">
+          <div><span>Cliente</span><b>{quote.client_name}</b></div>
+          <div><span>Quando</span><b>{when(quote.scheduled_at)}</b></div>
+          <div style={{ gridColumn: "1 / -1" }}><span>Onde</span><b>{quote.address || "A combinar"}</b></div>
+          {quote.deadline && <div><span>Prazo</span><b>{quote.deadline}</b></div>}
+          {quote.payment && <div><span>Pagamento</span><b>{quote.payment}</b></div>}
+        </div>
+        <table className="items">
+          <thead><tr><th>Serviço</th><th className="num">Valor</th></tr></thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i}>
+                <td>{item.name}{lineQty(item) > 1 && <small>{lineQty(item)} × {money(item.price_cents)}</small>}</td>
+                <td className="num">{money(lineTotal(item))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {quote.description && <div className="note"><b>Observação</b><br />{quote.description}</div>}
+        <div className="grand"><span>Total</span><b>{money(quote.price_cents)}</b></div>
+      </article>
+
+      {msg && <p className="error" role="alert">{msg}</p>}
+
       {quote.status === "sent" && (
-        <div className="row" style={{ marginTop: 16 }}>
-          <button className="btn" disabled={busy} onClick={() => decide("approved")}>{busy ? "Enviando" : "Aprovar"}</button>
-          <button className="btn-ghost" disabled={busy} onClick={() => decide("rejected")}>Recusar</button>
+        <div className="decide">
+          <button className="btn btn-lg" disabled={busy} onClick={() => decide("approved")}><Icon name="check" />{busy ? "Enviando" : "Aprovar"}</button>
+          <button className="btn-ghost btn-lg" disabled={busy} onClick={() => decide("rejected")}>Recusar</button>
         </div>
       )}
+
       {quote.status === "approved" && (
-        <article className="card" style={{ marginTop: 16 }}>
-          <div className="kicker ok">Aprovado</div>
-          {quote.pix_key
-            ? <p>PIX: <b>{quote.pix_key}</b> <button className="btn-ghost" onClick={copyPix}>{copied ? "Copiado" : "Copiar chave"}</button></p>
-            : <p>O técnico manda a chave PIX no WhatsApp.</p>}
-          {okLink && <a className="btn" href={okLink}>Avisar o técnico no WhatsApp</a>}
+        <article className="card pix">
+          <div className="kicker">Pagamento por PIX</div>
+          {quote.pix_key ? (
+            <div className="key">
+              <code>{quote.pix_key}</code>
+              <button className="btn-soft" onClick={copyPix}><Icon name={copied ? "check" : "copy"} />{copied ? "Copiado" : "Copiar chave"}</button>
+            </div>
+          ) : <p className="muted" style={{ margin: "8px 0 0" }}>O técnico manda a chave PIX no WhatsApp.</p>}
+          {okLink && <a className="btn-wa btn-lg btn-block" style={{ marginTop: 12 }} href={okLink}><WhatsAppIcon />Avisar o técnico no WhatsApp</a>}
         </article>
       )}
-      {quote.status === "rejected" && <p className="no">Orçamento recusado ou cancelado.</p>}
-      {noLink && <a className="btn-ghost" href={noLink}>Avisar que recusou</a>}
-      {["done", "paid"].includes(quote.status) && <p className="ok">Serviço {quote.status === "paid" ? "pago" : "marcado como feito"}.</p>}
+      {noLink && <a className="btn-ghost btn-block" style={{ marginTop: 12 }} href={noLink}><WhatsAppIcon />Avisar que recusou</a>}
+
+      <div className="row" style={{ marginTop: 16, justifyContent: "center" }}>
+        <button className="btn-ghost" onClick={() => downloadQuotePdf(quote)}><Icon name="file" />Baixar PDF</button>
+      </div>
+      <p className="trust">Orçamento enviado por {quote.business_name} usando <Link href="/">Visita</Link>. Este documento não é nota fiscal.</p>
     </main>
   );
 }

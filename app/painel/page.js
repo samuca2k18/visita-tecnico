@@ -8,6 +8,7 @@ import {
 } from "../../lib/shared";
 import { loadDemo, saveDemo, encodeQuote, loadExtra, saveExtra, shrinkLogo } from "../../lib/demo";
 import { openPaper } from "../../lib/papers";
+import { Brand, BrandMark, Icon, WhatsAppIcon } from "../../lib/icons";
 
 const PROFILE_FIELDS = ["business_name", "owner_name", "cnpj", "address_line", "city", "phone", "email", "pix_key", "logo_data"];
 const DEFAULT_PROFILE = { business_name: "Meu serviço", owner_name: "", cnpj: "", address_line: "", city: "Fortaleza", phone: "", email: "", pix_key: "", logo_data: "" };
@@ -233,58 +234,90 @@ export default function Painel() {
 
   if (!session) {
     return (
-      <main className="shell">
-        <div className="top"><Link className="brand" href="/">Visi<span>ta</span></Link></div>
-        <form className="card" onSubmit={signIn} noValidate>
-          <div className="kicker">Técnico</div>
-          <h2>Entrar</h2>
-          <label htmlFor="email">E-mail</label>
-          <input id="email" name="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-          <label htmlFor="password">Senha</label>
-          <input id="password" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
-          <div className="hp" aria-hidden="true">
-            <label htmlFor="website">Site</label>
-            <input id="website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+      <main className="auth">
+        <div className="auth-box">
+          <div className="auth-head">
+            <Brand />
+            <h1>Seu orçamento aprovado pelo WhatsApp</h1>
+            <p>Entre pra montar orçamentos, mandar o link pro cliente e acompanhar quem aprovou e quem já pagou.</p>
           </div>
-          {error && <p className="error">{error}</p>}
-          {info && <p className="muted">{info}</p>}
-          <div className="row" style={{ marginTop: 16 }}>
-            <button className="btn" type="submit" disabled={authBusy}>Entrar</button>
-            <button className="btn-ghost" type="button" disabled={authBusy} onClick={signUp}>Criar conta</button>
+          <form className="card" onSubmit={signIn} noValidate>
+            <label htmlFor="email">E-mail</label>
+            <input id="email" name="email" autoComplete="email" inputMode="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+            <label htmlFor="password">Senha</label>
+            <input id="password" name="password" autoComplete="current-password" placeholder="Pelo menos 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={6} />
+            <div className="hp" aria-hidden="true">
+              <label htmlFor="website">Site</label>
+              <input id="website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+            </div>
+            {error && <p className="error" role="alert">{error}</p>}
+            {info && <p className="muted" role="status">{info}</p>}
+            <div className="stack" style={{ marginTop: 20, gap: 10 }}>
+              <button className="btn btn-lg btn-block" type="submit" disabled={authBusy}>Entrar</button>
+              <button className="btn-ghost btn-lg btn-block" type="button" disabled={authBusy} onClick={signUp}>Criar conta</button>
+            </div>
+            <p className="small muted" style={{ marginBottom: 0, textAlign: "center" }}>Primeira vez? Coloque e-mail e senha e toque em Criar conta.</p>
+          </form>
+          <div className="auth-perks">
+            <span><Icon name="check" /> Sem app pro cliente</span>
+            <span><Icon name="check" /> PIX direto pra você</span>
+            <span><Icon name="check" /> PDF com sua logo</span>
           </div>
-          <p className="small muted">Pra criar conta, coloque seu e-mail e uma senha de pelo menos 6 caracteres e toque em Criar conta.</p>
-        </form>
+        </div>
       </main>
     );
   }
 
-  if (!data) return <main className="shell"><p className="muted">Carregando.</p></main>;
+  if (!data) return <main className="auth"><p className="muted">Carregando…</p></main>;
+
+  const tabs = [
+    ["hoje", "Hoje", "today"],
+    ["novo", "Novo", "plus"],
+    ["servicos", "Serviços", "wrench"],
+    ["ajustes", "Ajustes", "gear"]
+  ];
 
   return (
-    <main className="shell">
-      <div className="top">
-        <Link className="brand" href="/">Visi<span>ta</span></Link>
-        <span className="muted small">{live ? "Conta online" : "Ensaio neste aparelho"}</span>
-      </div>
-      {notice.text && (
-        <p className={notice.bad ? "error" : "small"}>
-          {notice.text} <button className="link" onClick={() => say("")}>fechar</button>
-        </p>
-      )}
-      <div className="tabs">
-        {["hoje", "novo", "servicos", "ajustes"].map((id) => (
-          <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
-            {id === "hoje" ? "Hoje" : id === "novo" ? "Novo" : id === "servicos" ? "Serviços" : "Ajustes"}
-          </button>
-        ))}
-      </div>
-      {tab === "hoje" && <Hoje data={data} setStatus={setStatus} updateQuote={updateQuote} linkFor={linkFor} duplicate={duplicate} />}
-      {tab === "novo" && (
-        <Novo key={draftKey} data={data} initial={draft} addQuote={addQuote} onDone={() => setDraft(null)} />
-      )}
-      {tab === "servicos" && <Servicos data={data} addService={addService} updateService={updateService} />}
-      {tab === "ajustes" && <Ajustes data={data} saveProfile={saveProfile} live={live} onOut={() => live ? getSupabase().auth.signOut() : null} />}
-    </main>
+    <div className="app">
+      <header className="appbar">
+        <div className="appbar-in">
+          <div className="row" style={{ flexWrap: "nowrap", minWidth: 0 }}>
+            {data.profile.logo_data
+              ? <img src={data.profile.logo_data} alt="" style={{ width: 34, height: 34, borderRadius: 9, objectFit: "contain", background: "#fff", flex: "none" }} />
+              : <BrandMark />}
+            <div className="biz">
+              <b>{data.profile.business_name || "Meu serviço"}</b>
+              <span>Visita · painel do técnico</span>
+            </div>
+          </div>
+          <span className={"mode" + (live ? " on" : "")}>{live ? "Online" : "Ensaio"}</span>
+        </div>
+      </header>
+      <main className="content">
+        {notice.text && (
+          <div className={"notice" + (notice.bad ? " bad" : "")} role={notice.bad ? "alert" : "status"}>
+            <span>{notice.text}</span>
+            <button className="link" onClick={() => say("")}>fechar</button>
+          </div>
+        )}
+        {tab === "hoje" && <Hoje data={data} setStatus={setStatus} updateQuote={updateQuote} linkFor={linkFor} duplicate={duplicate} goNovo={() => setTab("novo")} />}
+        {tab === "novo" && (
+          <Novo key={draftKey} data={data} initial={draft} addQuote={addQuote} onDone={() => setDraft(null)} goHoje={() => setTab("hoje")} />
+        )}
+        {tab === "servicos" && <Servicos data={data} addService={addService} updateService={updateService} />}
+        {tab === "ajustes" && <Ajustes data={data} saveProfile={saveProfile} live={live} onOut={() => live ? getSupabase().auth.signOut() : null} />}
+      </main>
+      <nav className="bottomnav" aria-label="Seções do painel">
+        <div className="bottomnav-in">
+          {tabs.map(([id, label, icon]) => (
+            <button key={id} className={tab === id ? "on" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => { setTab(id); window.scrollTo(0, 0); }}>
+              {id === "novo" ? <span className="plus"><Icon name="plus" /></span> : <Icon name={icon} />}
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
   );
 }
 
@@ -292,7 +325,30 @@ function shareText(q, link) {
   return `Olá${q.client_name ? ", " + q.client_name.split(" ")[0] : ""}! Segue o orçamento de ${q.service_name} (${money(q.price_cents)}): ${link}`;
 }
 
-function Hoje({ data, setStatus, updateQuote, linkFor, duplicate }) {
+function PageTitle({ title, sub, children }) {
+  return (
+    <div className="page-title">
+      <div>
+        <h1>{title}</h1>
+        {sub && <p>{sub}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Empty({ icon, title, text, action, onAction }) {
+  return (
+    <div className="empty">
+      <div className="ico"><Icon name={icon} /></div>
+      <h3>{title}</h3>
+      <p>{text}</p>
+      {action && <button className="btn" onClick={onAction}><Icon name="plus" />{action}</button>}
+    </div>
+  );
+}
+
+function Hoje({ data, setStatus, updateQuote, linkFor, duplicate, goNovo }) {
   const [filter, setFilter] = useState("proximos");
   const [editing, setEditing] = useState("");
   const [copied, setCopied] = useState("");
@@ -322,68 +378,107 @@ function Hoje({ data, setStatus, updateQuote, linkFor, duplicate }) {
     return ts(a) - ts(b);
   });
 
+  const receber = data.quotes.filter((q) => ["approved", "done"].includes(q.status)).reduce((s, q) => s + (Number(q.price_cents) || 0), 0);
+  const aprovados = data.quotes.filter((q) => q.status === "approved").length;
+  const visitasHoje = data.quotes.filter((q) => q.scheduled_at && dayKey(q.scheduled_at) === today && q.status !== "rejected").length;
+
   function cancel(q) {
     if (window.confirm(`Cancelar o orçamento de ${q.client_name}? No link do cliente ele aparece como recusado/cancelado.`)) setStatus(q.token, "rejected");
   }
 
+  const next = {
+    sent: ["Cliente aprovou", "approved", "check"],
+    approved: ["Marcar feito", "done", "check"],
+    done: ["Marcar pago", "paid", "money"],
+    rejected: ["Reabrir", "sent", "undo"]
+  };
+
   return (
     <div>
-      <div className="chips">
+      <PageTitle title="Hoje" sub={new Date().toLocaleDateString("pt-BR", { timeZone: "America/Fortaleza", weekday: "long", day: "numeric", month: "long" })} />
+      <div className="stats">
+        <div className="stat main"><span>A receber</span><b>{money(receber)}</b></div>
+        <div className="stat"><span>Aprovados</span><b>{aprovados}</b></div>
+        <div className="stat"><span>Visitas hoje</span><b>{visitasHoje}</b></div>
+      </div>
+      <div className="chips" role="tablist" aria-label="Filtro">
         {[["hoje", "Hoje"], ["proximos", "Próximos"], ["todos", "Todos"]].map(([id, label]) => (
-          <button key={id} className={filter === id ? "on" : ""} onClick={() => setFilter(id)}>{label}</button>
+          <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? "on" : ""} onClick={() => setFilter(id)}>{label}</button>
         ))}
       </div>
       <div className="list">
         {list.length === 0 && (
-          <p className="muted">
-            {data.quotes.length === 0 ? "Nenhum orçamento ainda. Aba Novo." : filter === "hoje" ? "Nada marcado pra hoje." : "Nada em aberto. Veja Todos."}
-          </p>
+          data.quotes.length === 0
+            ? <Empty icon="file" title="Nenhum orçamento ainda" text="Monte o primeiro em menos de um minuto e mande o link pelo WhatsApp." action="Novo orçamento" onAction={goNovo} />
+            : filter === "hoje"
+              ? <Empty icon="today" title="Nada marcado pra hoje" text="As visitas com data de hoje aparecem aqui." action="Novo orçamento" onAction={goNovo} />
+              : <Empty icon="check" title="Tudo em dia" text="Nenhum orçamento em aberto. Toque em Todos pra ver o histórico." />
         )}
-        {list.map((q) => editing === q.token ? (
-          <QuoteForm
-            key={q.token}
-            services={data.services}
-            initial={q}
-            submitLabel="Salvar alterações"
-            onCancel={() => setEditing("")}
-            onSubmit={async (payload) => {
-              const res = await updateQuote(q.token, payload);
-              if (!res.error) setEditing("");
-              return res;
-            }}
-          />
-        ) : (
-          <article key={q.token} className="item">
-            <div className="split">
-              <b>{q.client_name} · {q.service_name}</b>
-              <span className={"pill " + q.status}>{STATUS[q.status]}</span>
-            </div>
-            <p className="small muted">{when(q.scheduled_at)} · {q.address || "sem endereço"}{q.client_phone ? " · " + formatPhone(q.client_phone) : ""}</p>
-            {itemsOf(q).length > 1 && (
-              <p className="small muted">{itemsOf(q).map((item) => (lineQty(item) > 1 ? `${lineQty(item)}× ` : "") + item.name).join(" · ")}</p>
-            )}
-            <div className="split">
-              <span className="price">{money(q.price_cents)}</span>
-              <div className="row">
-                <button className="btn-ghost" onClick={() => copy(q)}>{copied === q.token ? "Copiado" : "Copiar link"}</button>
-                {whatsAppLink(q.client_phone, "x") && <a className="btn" href={whatsAppLink(q.client_phone, shareText(q, linkFor(q)))} target="_blank" rel="noreferrer">WhatsApp</a>}
+        {list.map((q) => {
+          if (editing === q.token) {
+            return (
+              <QuoteForm
+                key={q.token}
+                services={data.services}
+                initial={q}
+                submitLabel="Salvar alterações"
+                onCancel={() => setEditing("")}
+                onSubmit={async (payload) => {
+                  const res = await updateQuote(q.token, payload);
+                  if (!res.error) setEditing("");
+                  return res;
+                }}
+              />
+            );
+          }
+          const wa = whatsAppLink(q.client_phone, shareText(q, linkFor(q)));
+          const step = next[q.status];
+          const isToday = q.scheduled_at && dayKey(q.scheduled_at) === today;
+          const primaryCount = (wa ? 1 : 0) + (step ? 1 : 0);
+          const copyBtn = (cls) => (
+            <button className={cls} onClick={() => copy(q)}><Icon name={copied === q.token ? "check" : "link"} />{copied === q.token ? "Copiado" : "Copiar link"}</button>
+          );
+          return (
+            <article key={q.token} className="qcard">
+              <div className="qcard-main">
+                <div className="qcard-head">
+                  <div style={{ minWidth: 0 }}>
+                    <h3>{q.client_name}</h3>
+                    <div className="svc">{q.service_name}</div>
+                  </div>
+                  <div className="qcard-total">
+                    <b>{money(q.price_cents)}</b>
+                    <span className={"pill " + q.status}>{STATUS[q.status]}</span>
+                  </div>
+                </div>
+                <div className="meta">
+                  <span className={isToday ? "when-today" : ""}><Icon name="clock" />{isToday ? "Hoje, " + new Date(q.scheduled_at).toLocaleTimeString("pt-BR", { timeZone: "America/Fortaleza", hour: "2-digit", minute: "2-digit" }) : when(q.scheduled_at)}</span>
+                  {q.address && <span><Icon name="pin" />{q.address}</span>}
+                  {q.client_phone && <span><Icon name="phone" />{formatPhone(q.client_phone)}</span>}
+                </div>
+                {itemsOf(q).length > 1 && (
+                  <div className="lines-mini">{itemsOf(q).map((item) => (lineQty(item) > 1 ? `${lineQty(item)}× ` : "") + item.name).join(" · ")}</div>
+                )}
+                <div className="qcard-actions">
+                  {wa && <a className="btn-wa" href={wa} target="_blank" rel="noreferrer"><WhatsAppIcon />WhatsApp</a>}
+                  {step && <button className={q.status === "rejected" ? "btn-ghost" : "btn"} onClick={() => setStatus(q.token, step[1])}><Icon name={step[2]} />{step[0]}</button>}
+                  {primaryCount < 2 && copyBtn("btn-ghost")}
+                </div>
               </div>
-            </div>
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="btn-ghost" onClick={() => openPaper("orcamento", q, data.profile)}>PDF orçamento</button>
-              <button className="btn-ghost" onClick={() => openPaper("recibo", q, data.profile)}>PDF recibo</button>
-              {q.status === "sent" && <button className="btn" onClick={() => setStatus(q.token, "approved")}>Cliente aprovou</button>}
-              {q.status === "approved" && <button className="btn" onClick={() => setStatus(q.token, "done")}>Marcar feito</button>}
-              {q.status === "done" && <button className="btn" onClick={() => setStatus(q.token, "paid")}>Marcar pago</button>}
-              {q.status === "rejected" && <button className="btn-ghost" onClick={() => setStatus(q.token, "sent")}>Reabrir</button>}
-            </div>
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="btn-ghost small" onClick={() => setEditing(q.token)}>Editar</button>
-              <button className="btn-ghost small" onClick={() => duplicate(q)}>Duplicar</button>
-              {["sent", "approved"].includes(q.status) && <button className="btn-ghost small no" onClick={() => cancel(q)}>Cancelar</button>}
-            </div>
-          </article>
-        ))}
+              <details className="qcard-more">
+                <summary>Mais opções <Icon name="chevron" /></summary>
+                <div className="row">
+                  {primaryCount >= 2 && copyBtn("btn-ghost small")}
+                  <button className="btn-ghost small" onClick={() => openPaper("orcamento", q, data.profile)}><Icon name="file" />PDF orçamento</button>
+                  <button className="btn-ghost small" onClick={() => openPaper("recibo", q, data.profile)}><Icon name="receipt" />PDF recibo</button>
+                  <button className="btn-ghost small" onClick={() => setEditing(q.token)}><Icon name="edit" />Editar</button>
+                  <button className="btn-ghost small" onClick={() => duplicate(q)}><Icon name="dup" />Duplicar</button>
+                  {["sent", "approved"].includes(q.status) && <button className="btn-danger small" onClick={() => cancel(q)}><Icon name="x" />Cancelar</button>}
+                </div>
+              </details>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -413,7 +508,19 @@ function formFrom(q) {
   };
 }
 
-function QuoteForm({ services, initial, onSubmit, submitLabel, onCancel, after }) {
+function Section({ n, title, hint, children }) {
+  return (
+    <section className="section">
+      <div className="section-h">
+        <span className="n">{n}</span>
+        <div><h2>{title}</h2>{hint && <p>{hint}</p>}</div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function QuoteForm({ services, initial, onSubmit, submitLabel, onCancel }) {
   const [form, setForm] = useState(() => formFrom(initial));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -462,82 +569,130 @@ function QuoteForm({ services, initial, onSubmit, submitLabel, onCancel, after }
   }
 
   return (
-    <form className="card" onSubmit={submit}>
-      <label>Cliente</label>
-      <input value={form.client_name} onChange={(e) => set("client_name", e.target.value)} required />
-      <label>Telefone do cliente (WhatsApp)</label>
-      <input value={form.client_phone} inputMode="tel" autoComplete="tel" onChange={(e) => set("client_phone", e.target.value)} onBlur={(e) => set("client_phone", formatPhone(e.target.value))} placeholder="(85) 99999-0000" />
-      <label>Endereço</label>
-      <input value={form.address} onChange={(e) => set("address", e.target.value)} />
-      <label>Objeto</label>
-      <input value={form.service_name} onChange={(e) => set("service_name", e.target.value)} placeholder="Split 12.000 BTU da sala" />
-      <label>Linhas do orçamento</label>
-      {active.length > 0 && (
-        <select value="" onChange={(e) => {
-          const service = active.find((s) => s.id === e.target.value);
-          if (!service) return;
-          setForm((f) => ({ ...f, items: [...f.items.filter((item) => item.name || item.price), { key: uid(), name: service.name, qty: "1", price: centsToInput(service.price_cents) }] }));
-        }}>
-          <option value="">Adicionar um serviço recorrente</option>
-          {active.map((s) => <option key={s.id} value={s.id}>{s.name} · {money(s.price_cents)}</option>)}
-        </select>
-      )}
-      {form.items.map((item) => (
-        <div className="line" key={item.key}>
-          <input placeholder="Serviço" value={item.name} onChange={(e) => setItem(item.key, "name", e.target.value)} />
-          <input className="qty" aria-label="Quantidade" inputMode="numeric" value={item.qty} onChange={(e) => setItem(item.key, "qty", e.target.value)} />
-          <input className="val" placeholder="Valor (R$)" aria-label="Valor unitário" inputMode="decimal" value={item.price} onChange={(e) => setItem(item.key, "price", e.target.value)} />
-          <button type="button" className="btn-ghost x" aria-label="Tirar linha" onClick={() => removeItem(item.key)}>×</button>
+    <form onSubmit={submit} noValidate>
+      <Section n="1" title="Cliente" hint="Quem vai receber o orçamento.">
+        <label htmlFor="q-client">Nome do cliente</label>
+        <input id="q-client" value={form.client_name} autoComplete="off" onChange={(e) => set("client_name", e.target.value)} placeholder="Maria Oliveira" required />
+        <label htmlFor="q-phone">WhatsApp do cliente</label>
+        <input id="q-phone" value={form.client_phone} inputMode="tel" autoComplete="tel" onChange={(e) => set("client_phone", e.target.value)} onBlur={(e) => set("client_phone", formatPhone(e.target.value))} placeholder="(85) 99999-0000" />
+        <label htmlFor="q-address">Endereço</label>
+        <input id="q-address" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="Rua, número, bairro" />
+      </Section>
+
+      <Section n="2" title="Serviços" hint="Quantidade × valor unitário.">
+        <label htmlFor="q-object">Objeto (opcional)</label>
+        <input id="q-object" value={form.service_name} onChange={(e) => set("service_name", e.target.value)} placeholder="Split 12.000 BTU da sala" />
+        {active.length > 0 && (
+          <>
+            <label htmlFor="q-pick">Adicionar serviço cadastrado</label>
+            <select id="q-pick" value="" onChange={(e) => {
+              const service = active.find((s) => s.id === e.target.value);
+              if (!service) return;
+              setForm((f) => ({ ...f, items: [...f.items.filter((item) => item.name || item.price), { key: uid(), name: service.name, qty: "1", price: centsToInput(service.price_cents) }] }));
+            }}>
+              <option value="">Escolher da lista…</option>
+              {active.map((s) => <option key={s.id} value={s.id}>{s.name} · {money(s.price_cents)}</option>)}
+            </select>
+          </>
+        )}
+        {form.items.map((item, idx) => {
+          const sub = (parseBRL(item.price) || 0) * qtyOf(item);
+          return (
+            <div className="lineitem" key={item.key}>
+              <div className="lineitem-top">
+                <input placeholder="Serviço" aria-label={`Serviço ${idx + 1}`} value={item.name} onChange={(e) => setItem(item.key, "name", e.target.value)} />
+                <button type="button" className="icon-btn" aria-label="Tirar linha" title="Tirar linha" onClick={() => removeItem(item.key)}><Icon name="trash" /></button>
+              </div>
+              <div className="lineitem-bottom">
+                <div className="stepper">
+                  <button type="button" aria-label="Diminuir quantidade" onClick={() => setItem(item.key, "qty", String(Math.max(1, qtyOf(item) - 1)))}>−</button>
+                  <input className="qty" aria-label="Quantidade" inputMode="numeric" value={item.qty} onChange={(e) => setItem(item.key, "qty", e.target.value)} />
+                  <button type="button" aria-label="Aumentar quantidade" onClick={() => setItem(item.key, "qty", String(qtyOf(item) + 1))}>+</button>
+                </div>
+                <div className="money-in">
+                  <span>R$</span>
+                  <input placeholder="Valor" aria-label="Valor unitário" inputMode="decimal" value={item.price} onChange={(e) => setItem(item.key, "price", e.target.value)} />
+                </div>
+                {qtyOf(item) > 1 && sub > 0 && <span className="line-sub">{money(sub)}</span>}
+              </div>
+            </div>
+          );
+        })}
+        <button className="btn-ghost add-line" type="button" onClick={() => set("items", [...form.items, blankLine()])}><Icon name="plus" />Mais uma linha</button>
+      </Section>
+
+      <Section n="3" title="Quando e pagamento">
+        <label htmlFor="q-when">Data da visita</label>
+        <input id="q-when" type="datetime-local" value={form.when} onChange={(e) => set("when", e.target.value)} />
+        <div className="field-row">
+          <div>
+            <label htmlFor="q-deadline">Prazo</label>
+            <input id="q-deadline" value={form.deadline} onChange={(e) => set("deadline", e.target.value)} placeholder="No dia" />
+          </div>
+          <div>
+            <label htmlFor="q-payment">Pagamento</label>
+            <input id="q-payment" value={form.payment} onChange={(e) => set("payment", e.target.value)} />
+          </div>
         </div>
-      ))}
-      <p className="small muted">Quantidade × valor unitário.</p>
-      <button className="btn-ghost" type="button" onClick={() => set("items", [...form.items, blankLine()])}>Mais uma linha</button>
-      <p className="price">Total {money(total)}</p>
-      <label>Prazo</label>
-      <input value={form.deadline} onChange={(e) => set("deadline", e.target.value)} placeholder="No dia" />
-      <label>Pagamento</label>
-      <input value={form.payment} onChange={(e) => set("payment", e.target.value)} />
-      <label>Data da visita</label>
-      <input type="datetime-local" value={form.when} onChange={(e) => set("when", e.target.value)} />
-      <label>Observação</label>
-      <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
-      {err && <p className="error">{err}</p>}
-      <div className="row" style={{ marginTop: 14 }}>
-        <button className="btn" type="submit" disabled={busy}>{busy ? "Salvando" : submitLabel}</button>
-        {onCancel && <button className="btn-ghost" type="button" onClick={onCancel}>Voltar</button>}
+        <label htmlFor="q-note">Observação</label>
+        <textarea id="q-note" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Peças à parte, garantia, etc." />
+      </Section>
+
+      {err && <div className="notice bad" role="alert"><span>{err}</span></div>}
+      <div className="formbar">
+        <div className="tot"><span>Total</span><b>{money(total)}</b></div>
+        <div className="row">
+          {onCancel && <button className="btn-ghost" type="button" onClick={onCancel}>Voltar</button>}
+          <button className="btn btn-lg" type="submit" disabled={busy}>{busy ? "Salvando…" : submitLabel}</button>
+        </div>
       </div>
-      {after}
     </form>
   );
 }
 
-function Novo({ data, initial, addQuote, onDone }) {
+function Novo({ data, initial, addQuote, onDone, goHoje }) {
   const [result, setResult] = useState(null);
   const [formKey, setFormKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const wa = result ? whatsAppLink(result.quote.client_phone, shareText(result.quote, result.link)) : "";
-  return (
-    <QuoteForm
-      key={formKey}
-      services={data.services}
-      initial={initial}
-      submitLabel="Gerar link"
-      onSubmit={async (payload) => {
-        const res = await addQuote(payload);
-        if (!res.error) { setResult(res); setCopied(false); onDone?.(); }
-        return res;
-      }}
-      after={result && (
-        <div className="card" style={{ marginTop: 14 }}>
-          <p className="small">Link do cliente:<br /><a href={result.link}>{result.link}</a></p>
-          <div className="row">
-            {wa && <a className="btn" href={wa} target="_blank" rel="noreferrer">Mandar no WhatsApp</a>}
-            <button className="btn-ghost" type="button" onClick={async () => { try { await navigator.clipboard.writeText(result.link); setCopied(true); } catch { window.prompt("Copie o link:", result.link); } }}>{copied ? "Copiado" : "Copiar link"}</button>
-            <button className="btn-ghost" type="button" onClick={() => { setResult(null); setFormKey((k) => k + 1); }}>Novo orçamento</button>
+  if (result) {
+    return (
+      <div>
+        <PageTitle title="Orçamento pronto" />
+        <article className="card success">
+          <div className="ico"><Icon name="check" /></div>
+          <h2>{result.quote.client_name} · {money(result.quote.price_cents)}</h2>
+          <p className="muted" style={{ margin: "6px 0 0" }}>Agora é só mandar o link. O cliente aprova por ele.</p>
+          <div className="linkbox">Link do cliente:<br /><a href={result.link}>{result.link}</a></div>
+          <div className="stack" style={{ gap: 10 }}>
+            {wa
+              ? <a className="btn-wa btn-lg btn-block" href={wa} target="_blank" rel="noreferrer"><WhatsAppIcon />Mandar no WhatsApp</a>
+              : <p className="small muted" style={{ margin: 0 }}>Sem telefone do cliente: copie o link e mande por onde preferir.</p>}
+            <button className={(wa ? "btn-ghost" : "btn") + " btn-lg btn-block"} type="button" onClick={async () => { try { await navigator.clipboard.writeText(result.link); setCopied(true); } catch { window.prompt("Copie o link:", result.link); } }}><Icon name={copied ? "check" : "copy"} />{copied ? "Copiado" : "Copiar link"}</button>
+            <div className="row" style={{ justifyContent: "center" }}>
+              <button className="btn-soft" type="button" onClick={() => { setResult(null); setFormKey((k) => k + 1); }}><Icon name="plus" />Novo orçamento</button>
+              <button className="btn-ghost" type="button" onClick={goHoje}>Ver na agenda</button>
+            </div>
           </div>
-        </div>
-      )}
-    />
+        </article>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <PageTitle title={initial ? "Duplicar orçamento" : "Novo orçamento"} sub="Preencha e gere o link pro cliente." />
+      <QuoteForm
+        key={formKey}
+        services={data.services}
+        initial={initial}
+        submitLabel="Gerar link"
+        onSubmit={async (payload) => {
+          const res = await addQuote(payload);
+          if (!res.error) { setResult(res); setCopied(false); onDone?.(); }
+          return res;
+        }}
+      />
+    </div>
   );
 }
 
@@ -560,14 +715,17 @@ function ServiceForm({ initial, onSubmit, onCancel, label }) {
     if (!initial) { setName(""); setPrice(""); setDescription(""); }
   }
   return (
-    <form className="card" style={{ marginTop: 12 }} onSubmit={submit}>
-      <label>{label}</label>
-      <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-      <input placeholder="Preço (R$)" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} required style={{ marginTop: 8 }} />
-      <textarea placeholder="Incluso" value={description} onChange={(e) => setDescription(e.target.value)} style={{ marginTop: 8 }} />
-      {err && <p className="error">{err}</p>}
-      <div className="row" style={{ marginTop: 10 }}>
-        <button className="btn" type="submit" disabled={busy}>{busy ? "Salvando" : "Salvar serviço"}</button>
+    <form className="card" style={{ marginTop: initial ? 0 : 16 }} onSubmit={submit} noValidate>
+      <h3>{label}</h3>
+      <label htmlFor={"s-name-" + (initial?.id || "new")}>Nome</label>
+      <input id={"s-name-" + (initial?.id || "new")} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+      <label htmlFor={"s-price-" + (initial?.id || "new")}>Preço</label>
+      <div className="money-in"><span>R$</span><input id={"s-price-" + (initial?.id || "new")} placeholder="Preço (R$)" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} required /></div>
+      <label htmlFor={"s-desc-" + (initial?.id || "new")}>O que está incluso</label>
+      <textarea id={"s-desc-" + (initial?.id || "new")} placeholder="Incluso" value={description} onChange={(e) => setDescription(e.target.value)} />
+      {err && <p className="error" role="alert">{err}</p>}
+      <div className="row" style={{ marginTop: 12 }}>
+        <button className="btn" type="submit" disabled={busy}>{busy ? "Salvando…" : "Salvar serviço"}</button>
         {onCancel && <button className="btn-ghost" type="button" onClick={onCancel}>Voltar</button>}
       </div>
     </form>
@@ -592,31 +750,32 @@ function Servicos({ data, addService, updateService }) {
       );
     }
     return (
-      <article key={s.id} className="item">
-        <div className="split">
-          <div><b>{s.name}</b><span className="small muted">{s.description}</span></div>
+      <article key={s.id} className={"svc-card" + (s.active === false ? " archived" : "")}>
+        <div className="split" style={{ alignItems: "flex-start" }}>
+          <div><b>{s.name}</b>{s.description && <span className="desc">{s.description}</span>}</div>
           <span className="price">{money(s.price_cents)}</span>
         </div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn-ghost small" onClick={() => setEditing(s.id)}>Editar</button>
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="btn-ghost small" onClick={() => setEditing(s.id)}><Icon name="edit" />Editar</button>
           {s.active !== false
-            ? <button className="btn-ghost small" onClick={() => toggle(s, false)}>Arquivar</button>
-            : <button className="btn-ghost small" onClick={() => toggle(s, true)}>Reativar</button>}
+            ? <button className="btn-ghost small" onClick={() => toggle(s, false)}><Icon name="archive" />Arquivar</button>
+            : <button className="btn-soft small" onClick={() => toggle(s, true)}><Icon name="undo" />Reativar</button>}
         </div>
       </article>
     );
   }
   return (
     <div>
-      {err && <p className="error">{err}</p>}
+      <PageTitle title="Serviços" sub="Cadastre uma vez, use em todo orçamento." />
+      {err && <div className="notice bad" role="alert"><span>{err}</span></div>}
       <div className="list">
-        {active.length === 0 && <p className="muted">Nenhum serviço ainda. Cadastre os que você faz sempre, com o preço.</p>}
+        {active.length === 0 && <Empty icon="wrench" title="Nenhum serviço ainda" text="Cadastre os serviços que você faz sempre, com o preço. Eles aparecem pra escolher no Novo." />}
         {active.map(row)}
       </div>
       <ServiceForm label="Novo serviço" onSubmit={addService} />
       {archived.length > 0 && (
         <>
-          <p className="kicker" style={{ marginTop: 20 }}>Arquivados</p>
+          <p className="kicker" style={{ marginTop: 24 }}>Arquivados</p>
           <div className="list">{archived.map(row)}</div>
         </>
       )}
@@ -630,47 +789,57 @@ function Ajustes({ data, saveProfile, live, onOut }) {
   const [msg, setMsg] = useState("");
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
   return (
-    <form className="card" onSubmit={async (e) => { e.preventDefault(); setSaving(true); await saveProfile(profile); setSaving(false); }}>
-      <label>Nome no papel</label>
-      <input value={profile.business_name || ""} onChange={(e) => set("business_name", e.target.value)} />
-      <label>Responsável</label>
-      <input value={profile.owner_name || ""} onChange={(e) => set("owner_name", e.target.value)} />
-      <label>CNPJ</label>
-      <input value={profile.cnpj || ""} inputMode="numeric" onChange={(e) => set("cnpj", e.target.value)} />
-      <label>Endereço da empresa</label>
-      <input value={profile.address_line || ""} onChange={(e) => set("address_line", e.target.value)} />
-      <label>Cidade</label>
-      <input value={profile.city || ""} onChange={(e) => set("city", e.target.value)} />
-      <label>Telefone (WhatsApp)</label>
-      <input value={profile.phone || ""} inputMode="tel" onChange={(e) => set("phone", e.target.value)} onBlur={(e) => set("phone", formatPhone(e.target.value))} placeholder="(85) 99999-0000" />
-      <label>E-mail</label>
-      <input value={profile.email || ""} type="email" inputMode="email" onChange={(e) => set("email", e.target.value)} />
-      <label>Chave PIX</label>
-      <input value={profile.pix_key || ""} onChange={(e) => set("pix_key", e.target.value)} />
-      <label>Logo</label>
-      <input type="file" accept="image/*" onChange={(e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setMsg("");
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const small = await shrinkLogo(reader.result);
-          if (!small) return setMsg("Não consegui ler essa imagem. Tenta um JPG ou PNG.");
-          set("logo_data", small);
-        };
-        reader.readAsDataURL(file);
-      }} />
-      {msg && <p className="error">{msg}</p>}
-      {profile.logo_data && (
-        <div className="row" style={{ alignItems: "center", marginTop: 8 }}>
-          <img src={profile.logo_data} alt="Logo" style={{ height: 64 }} />
-          <button className="btn-ghost small" type="button" onClick={() => set("logo_data", "")}>Tirar logo</button>
-        </div>
-      )}
-      <button className="btn" style={{ marginTop: 14 }} type="submit" disabled={saving}>{saving ? "Salvando" : "Salvar"}</button>
-      <p className="small muted">{live ? "Tudo aqui fica salvo na sua conta, inclusive a logo (reduzida). A logo aparece no topo do PDF e no link do cliente." : "Sem Supabase: os dados ficam neste navegador. O link do cliente funciona em outro celular porque o orçamento vai dentro do próprio link."}</p>
+    <form onSubmit={async (e) => { e.preventDefault(); setSaving(true); await saveProfile(profile); setSaving(false); }}>
+      <PageTitle title="Ajustes" sub="Como sua empresa aparece no link e no PDF." />
+      <section className="section">
+        <div className="section-h"><span className="n"><Icon name="file" width="16" height="16" /></span><div><h2>Empresa</h2></div></div>
+        <label>Nome no papel</label>
+        <input value={profile.business_name || ""} onChange={(e) => set("business_name", e.target.value)} />
+        <label>Responsável</label>
+        <input value={profile.owner_name || ""} onChange={(e) => set("owner_name", e.target.value)} />
+        <label>CNPJ</label>
+        <input value={profile.cnpj || ""} inputMode="numeric" onChange={(e) => set("cnpj", e.target.value)} />
+        <label>Endereço da empresa</label>
+        <input value={profile.address_line || ""} onChange={(e) => set("address_line", e.target.value)} />
+        <label>Cidade</label>
+        <input value={profile.city || ""} onChange={(e) => set("city", e.target.value)} />
+      </section>
+      <section className="section">
+        <div className="section-h"><span className="n"><Icon name="money" width="16" height="16" /></span><div><h2>Contato e PIX</h2><p>O cliente vê depois de aprovar.</p></div></div>
+        <label>Telefone (WhatsApp)</label>
+        <input value={profile.phone || ""} inputMode="tel" onChange={(e) => set("phone", e.target.value)} onBlur={(e) => set("phone", formatPhone(e.target.value))} placeholder="(85) 99999-0000" />
+        <label>E-mail</label>
+        <input value={profile.email || ""} type="email" inputMode="email" onChange={(e) => set("email", e.target.value)} />
+        <label>Chave PIX</label>
+        <input value={profile.pix_key || ""} onChange={(e) => set("pix_key", e.target.value)} />
+      </section>
+      <section className="section">
+        <div className="section-h"><span className="n"><Icon name="image" width="16" height="16" /></span><div><h2>Logo</h2><p>Aparece no topo do PDF e no link do cliente.</p></div></div>
+        <label>Logo</label>
+        <input type="file" accept="image/*" onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setMsg("");
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const small = await shrinkLogo(reader.result);
+            if (!small) return setMsg("Não consegui ler essa imagem. Tenta um JPG ou PNG.");
+            set("logo_data", small);
+          };
+          reader.readAsDataURL(file);
+        }} />
+        {msg && <p className="error">{msg}</p>}
+        {profile.logo_data && (
+          <div className="row" style={{ marginTop: 12 }}>
+            <img src={profile.logo_data} alt="Logo" style={{ height: 64, borderRadius: 10, background: "#fff", border: "1px solid var(--line)" }} />
+            <button className="btn-ghost small" type="button" onClick={() => set("logo_data", "")}><Icon name="trash" />Tirar logo</button>
+          </div>
+        )}
+      </section>
+      <button className="btn btn-lg btn-block" type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
+      <p className="small muted">{live ? "Tudo aqui fica salvo na sua conta, inclusive a logo (reduzida)." : "Sem Supabase: os dados ficam neste navegador. O link do cliente funciona em outro celular porque o orçamento vai dentro do próprio link."}</p>
       <p className="small muted">O PDF deixa o campo de assinatura em branco. Assine à mão ou digitalmente.</p>
-      {live && <button className="btn-ghost" type="button" onClick={onOut}>Sair</button>}
+      {live && <button className="btn-ghost btn-block" type="button" onClick={onOut} style={{ marginTop: 8 }}><Icon name="out" />Sair da conta</button>}
     </form>
   );
 }
